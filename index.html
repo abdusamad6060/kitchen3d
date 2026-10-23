@@ -6,91 +6,78 @@
     <title>3D Конструктор Кухонь — Кухни Исфара</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; overflow: hidden; background: #121212; color: #fff; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; background: #181818; color: #fff; }
         #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
 
-        /* Верхняя панель вкладок каталога */
+        /* Панель категорий */
         #catalog-tabs {
             position: absolute; top: 10px; left: 10px; right: 10px;
             display: flex; gap: 6px; overflow-x: auto; padding-bottom: 5px;
-            z-index: 10; scrollbar-width: none;
+            z-index: 10;
         }
-        #catalog-tabs::-webkit-scrollbar { display: none; }
-        
         .tab-btn {
-            background: rgba(30, 30, 30, 0.85); backdrop-filter: blur(8px);
-            color: #bbb; border: 1px solid #333; padding: 8px 14px;
-            border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;
-            white-space: nowrap; transition: all 0.2s;
+            background: rgba(30, 30, 30, 0.9); backdrop-filter: blur(8px);
+            color: #fff; border: 1px solid #444; padding: 8px 14px;
+            border-radius: 8px; font-size: 12px; font-weight: bold; cursor: pointer;
+            white-space: nowrap;
         }
-        .tab-btn.active { background: #007aff; color: #fff; border-color: #007aff; }
+        .tab-btn.active { background: #007aff; border-color: #007aff; }
 
-        /* Выпадающая панель подкатегорий модулей */
+        /* Подкатегории */
         #sub-catalog {
             position: absolute; top: 55px; left: 10px; right: 10px;
-            background: rgba(20, 20, 20, 0.92); backdrop-filter: blur(10px);
-            border: 1px solid #333; border-radius: 10px; padding: 10px;
+            background: rgba(20, 20, 20, 0.95); backdrop-filter: blur(10px);
+            border: 1px solid #333; border-radius: 10px; padding: 8px;
             display: flex; gap: 8px; overflow-x: auto; z-index: 10;
-            display: none;
         }
         .item-card {
-            background: #2a2a2a; border: 1px solid #444; border-radius: 8px;
-            padding: 8px 12px; font-size: 12px; cursor: pointer; text-align: center;
-            min-width: 110px; transition: transform 0.1s, background 0.2s;
+            background: #2a2a2a; border: 1px solid #444; border-radius: 6px;
+            padding: 8px 12px; font-size: 11px; cursor: pointer; text-align: center;
+            min-width: 100px; white-space: nowrap;
         }
-        .item-card:active { transform: scale(0.96); background: #3a3a3c; }
-        .item-card b { display: block; margin-bottom: 3px; color: #34c759; }
+        .item-card b { display: block; color: #34c759; margin-bottom: 2px; }
 
-        /* Правая панель быстрых действий (Камера / Спецификация) */
+        /* Панель инструментов справа */
         #right-toolbar {
-            position: absolute; right: 10px; bottom: 100px;
+            position: absolute; right: 10px; bottom: 80px;
             display: flex; flex-direction: column; gap: 8px; z-index: 10;
         }
         .icon-btn {
             background: rgba(30,30,30,0.9); border: 1px solid #444; color: #fff;
-            width: 44px; height: 44px; border-radius: 10px; display: flex;
-            align-items: center; justify-content: center; font-size: 18px; cursor: pointer;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+            width: 40px; height: 40px; border-radius: 8px; display: flex;
+            align-items: center; justify-content: center; font-size: 16px; cursor: pointer;
         }
 
-        /* Нижняя панель свойств выбранного модуля */
+        /* Панель свойств */
         #properties-panel {
             position: absolute; bottom: 15px; left: 10px; right: 10px;
             background: rgba(24, 24, 24, 0.95); backdrop-filter: blur(12px);
-            border: 1px solid #444; border-radius: 14px; padding: 14px;
-            display: none; z-index: 10; max-height: 40vh; overflow-y: auto;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+            border: 1px solid #444; border-radius: 12px; padding: 12px;
+            display: none; z-index: 10;
         }
-        #properties-panel h4 { margin-bottom: 8px; font-size: 14px; color: #34c759; display: flex; justify-content: space-between; }
-        .prop-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; margin-bottom: 10px; }
-        .prop-group { display: flex; flex-direction: column; gap: 3px; }
-        .prop-group label { font-size: 10px; color: #999; text-transform: uppercase; }
+        #properties-panel h4 { margin-bottom: 8px; font-size: 13px; color: #34c759; display: flex; justify-content: space-between; }
+        .prop-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px; margin-bottom: 10px; }
+        .prop-group { display: flex; flex-direction: column; gap: 2px; }
+        .prop-group label { font-size: 10px; color: #aaa; }
         .prop-group input, .prop-group select {
             background: #1a1a1a; border: 1px solid #444; color: #fff;
-            padding: 6px; border-radius: 6px; font-size: 12px;
+            padding: 5px; border-radius: 4px; font-size: 12px;
         }
-        .panel-actions { display: flex; gap: 6px; }
-        .btn-action {
-            flex: 1; padding: 8px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; cursor: pointer;
-        }
+        .btn-action { padding: 8px; border-radius: 6px; border: none; font-weight: bold; font-size: 12px; cursor: pointer; flex: 1; }
         .btn-del { background: #ff3b30; color: #fff; }
         .btn-door { background: #ff9500; color: #000; }
 
-        /* Модальное окно отчёта */
+        /* Модальное окно */
         #report-modal {
-            position: absolute; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);
+            position: absolute; inset: 0; background: rgba(0,0,0,0.9);
             display: none; flex-direction: column; padding: 20px; z-index: 100;
         }
-        #report-content { background: #1a1a1a; border: 1px solid #333; border-radius: 12px; padding: 16px; flex: 1; overflow-y: auto; margin-bottom: 12px; font-family: monospace; font-size: 11px; line-height: 1.5; }
-        .table-spec { width: 100%; border-collapse: collapse; margin-top: 10px; text-align: left; }
+        #report-content { background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 12px; flex: 1; overflow-y: auto; margin-bottom: 10px; font-family: monospace; font-size: 11px; }
+        .table-spec { width: 100%; border-collapse: collapse; text-align: left; }
         .table-spec th, .table-spec td { border: 1px solid #333; padding: 6px; }
         .table-spec th { background: #222; color: #34c759; }
-        
-        .main-btn {
-            background: #007aff; color: #fff; border: none; padding: 10px 16px;
-            border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 13px;
-        }
     </style>
+    <!-- Прямое подключение Three.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/GLTFExporter.js"></script>
@@ -98,28 +85,23 @@
 </head>
 <body>
 
-    <!-- Вкладки каталога по аналогии с loyhachi -->
     <div id="catalog-tabs">
-        <button class="tab-btn active" onclick="switchTab('base')">🍳 Нижние модули</button>
-        <button class="tab-btn" onclick="switchTab('wall')">☁️ Верхние шкафы</button>
-        <button class="tab-btn" onclick="switchTab('tall')">🏛️ Пеналы</button>
-        <button class="tab-btn" onclick="switchTab('counter')">🪵 Столешницы</button>
-        <button class="tab-btn" onclick="switchTab('actions')">⚙️ Проект</button>
+        <button class="tab-btn active" onclick="switchTab('base', this)">🍳 Нижние модули</button>
+        <button class="tab-btn" onclick="switchTab('wall', this)">☁️ Верхние шкафы</button>
+        <button class="tab-btn" onclick="switchTab('tall', this)">🏛️ Пеналы</button>
+        <button class="tab-btn" onclick="switchTab('counter', this)">🪵 Столешницы</button>
     </div>
 
-    <!-- Подменю выбора конкретных элементов -->
-    <div id="sub-catalog" style="display: flex;"></div>
+    <div id="sub-catalog"></div>
 
-    <!-- Правая панель инструментов -->
     <div id="right-toolbar">
-        <div class="icon-btn" onclick="resetCamera()" title="Сбросить камеру">🏠</div>
+        <div class="icon-btn" onclick="resetCamera()" title="Сброс камеры">🏠</div>
         <div class="icon-btn" onclick="generateReport()" title="Спецификация">📋</div>
         <div class="icon-btn" onclick="export3D()" title="Скачать 3D">💾</div>
     </div>
 
-    <!-- Панель свойств выбранного шкафа -->
     <div id="properties-panel">
-        <h4 id="mod-title">Редактирование модуля <span onclick="unselectModule()" style="cursor:pointer; color:#888;">✕</span></h4>
+        <h4>Редактирование модуля <span onclick="unselectModule()" style="cursor:pointer;">✕</span></h4>
         <div class="prop-grid">
             <div class="prop-group">
                 <label>Ширина (мм)</label>
@@ -139,102 +121,101 @@
                     <option value="sonoma">Дуб Сонома</option>
                     <option value="wotan">Дуб Вотан</option>
                     <option value="white_gloss">Белый глянец</option>
-                    <option value="graphite">Графит матовый</option>
+                    <option value="graphite">Графит</option>
                     <option value="wenge">Венге</option>
                     <option value="concrete">Бетон</option>
                 </select>
             </div>
         </div>
-        <div class="panel-actions">
+        <div style="display:flex; gap:8px;">
             <button class="btn-action btn-door" onclick="toggleDoorAnimation()">🚪 Дверь открыть/закрыть</button>
-            <button class="btn-action btn-del" onclick="deleteSelectedModule()">Удалить шкаф</button>
+            <button class="btn-action btn-del" onclick="deleteSelectedModule()">Удалить</button>
         </div>
     </div>
 
-    <!-- Модальное окно спецификации -->
     <div id="report-modal">
-        <h3 style="margin-bottom: 10px; color:#34c759;">📋 Спецификация и раскрой материалов</h3>
+        <h3 style="margin-bottom: 10px; color:#34c759;">📋 Спецификация и раскрой</h3>
         <div id="report-content"></div>
         <div style="display:flex; gap:10px;">
-            <button class="main-btn" style="flex:1;" onclick="downloadPDF()">Скачать PDF отчет</button>
-            <button class="main-btn" style="background:#444; flex:1;" onclick="closeReport()">Закрыть</button>
+            <button onclick="downloadPDF()" style="padding:10px; background:#007aff; color:#fff; border:none; border-radius:6px; font-weight:bold; cursor:pointer; flex:1;">Скачать PDF</button>
+            <button onclick="closeReport()" style="padding:10px; background:#444; color:#fff; border:none; border-radius:6px; font-weight:bold; cursor:pointer; flex:1;">Закрыть</button>
         </div>
     </div>
 
     <div id="canvas-container"></div>
 
     <script>
-        const container = document.getElementById('canvas-container');
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x181818);
-
-        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
-        camera.position.set(3, 2.5, 4);
-
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.shadowMap.enabled = true;
-        container.appendChild(renderer.domElement);
-
-        const controls = new THREE.OrbitControls(camera, renderer.domElement);
-        controls.target.set(0, 0.9, 0);
-
-        scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-        const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
-        dirLight.position.set(6, 10, 6);
-        dirLight.castShadow = true;
-        scene.add(dirLight);
-
-        scene.add(new THREE.GridHelper(10, 20, 0x444444, 0x222222));
-
+        let scene, camera, renderer, controls;
         let modules = [];
         let selectedModule = null;
 
         const texturesLDSP = {
-            sonoma: { color: 0xd2b59b, roughness: 0.6, name: "Дуб Сонома" },
-            wotan: { color: 0x8b5a2b, roughness: 0.65, name: "Дуб Вотан" },
-            white_gloss: { color: 0xffffff, roughness: 0.1, name: "Белый глянец" },
-            graphite: { color: 0x383838, roughness: 0.4, name: "Графит матовый" },
-            wenge: { color: 0x3d2817, roughness: 0.5, name: "Венге" },
-            concrete: { color: 0x9e9e9e, roughness: 0.7, name: "Бетон" }
+            sonoma: { color: 0xd2b59b, name: "Дуб Сонома" },
+            wotan: { color: 0x8b5a2b, name: "Дуб Вотан" },
+            white_gloss: { color: 0xffffff, name: "Белый глянец" },
+            graphite: { color: 0x383838, name: "Графит" },
+            wenge: { color: 0x3d2817, name: "Венге" },
+            concrete: { color: 0x9e9e9e, name: "Бетон" }
         };
 
-        // Данные каталога вкладок (как на loyhachi)
         const catalogItems = {
             base: [
-                { name: "Шкаф с распашной дверью", w: 0.6, h: 0.85, d: 0.6, type: "base_door" },
-                { name: "Шкаф с 3 ящиками", w: 0.6, h: 0.85, d: 0.6, type: "base_drawers" },
-                { name: "Шкаф под мойку", w: 0.8, h: 0.85, d: 0.6, type: "base_sink" },
-                { name: "Угловой нижний модуль", w: 0.9, h: 0.85, d: 0.9, type: "base_corner" }
+                { name: "Шкаф распашной", w: 0.6, h: 0.85, d: 0.6, type: "base" },
+                { name: "Шкаф с ящиками", w: 0.6, h: 0.85, d: 0.6, type: "base" },
+                { name: "Шкаф под мойку", w: 0.8, h: 0.85, d: 0.6, type: "base" }
             ],
             wall: [
-                { name: "Верхний шкаф одинарный", w: 0.6, h: 0.72, d: 0.35, type: "wall_single" },
-                { name: "Верхний горизонтальный", w: 0.9, h: 0.36, d: 0.35, type: "wall_horiz" },
-                { name: "Шкаф под вытяжку", w: 0.6, h: 0.36, d: 0.35, type: "wall_hood" }
+                { name: "Верхний шкаф", w: 0.6, h: 0.72, d: 0.35, type: "wall" },
+                { name: "Шкаф горизонтальный", w: 0.8, h: 0.36, d: 0.35, type: "wall" }
             ],
             tall: [
-                { name: "Пенал под духовку", w: 0.6, h: 2.1, d: 0.6, type: "tall_oven" },
-                { name: "Пенал для посуды", w: 0.6, h: 2.1, d: 0.6, type: "tall_pantry" }
+                { name: "Пенал под технику", w: 0.6, h: 2.1, d: 0.6, type: "tall" }
             ],
             counter: [
-                { name: "Столешница (3 метра)", w: 3.0, h: 0.04, d: 0.6, type: "countertop" }
-            ],
-            actions: []
+                { name: "Столешница (3м)", w: 3.0, h: 0.04, d: 0.6, type: "countertop" }
+            ]
         };
 
-        function switchTab(tabKey) {
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            event.target.classList.add('active');
+        function init3D() {
+            const container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x222222);
 
-            const sub = document.getElementById('sub-catalog');
-            if (tabKey === 'actions') {
-                sub.style.display = 'none';
-                return;
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(2.5, 2.0, 3.5);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            container.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.target.set(0, 0.8, 0);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            dirLight.position.set(5, 8, 5);
+            scene.add(dirLight);
+
+            const grid = new THREE.GridHelper(8, 16, 0x555555, 0x333333);
+            scene.add(grid);
+
+            animate();
+            switchTab('base', document.querySelector('.tab-btn.active'));
+        }
+
+        function switchTab(tabKey, btn) {
+            if (btn) {
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
             }
 
-            sub.style.display = 'flex';
+            const sub = document.getElementById('sub-catalog');
             sub.innerHTML = '';
-            
+            if (!catalogItems[tabKey]) return;
+
             catalogItems[tabKey].forEach(item => {
                 const card = document.createElement('div');
                 card.className = 'item-card';
@@ -244,32 +225,24 @@
             });
         }
 
-        // По умолчанию открываем вкладку нижних модулей
-        switchTab('base');
-
         function createModuleMesh(item, textureKey) {
             const group = new THREE.Group();
             const w = item.w, h = item.h, d = item.d;
 
-            // Корпус
             const bodyGeo = new THREE.BoxGeometry(w, h, d);
-            const bodyMat = new THREE.MeshStandardMaterial({ color: 0xf0f0f0, roughness: 0.4 });
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0xdddddd });
             const body = new THREE.Mesh(bodyGeo, bodyMat);
             body.position.y = h / 2;
-            body.castShadow = true;
-            body.receiveShadow = true;
             group.add(body);
 
-            // Фасад на петлях
             const doorPivot = new THREE.Group();
             doorPivot.position.set(-w / 2, 0, d / 2);
 
             const tex = texturesLDSP[textureKey] || texturesLDSP.sonoma;
             const doorGeo = new THREE.BoxGeometry(w - 0.004, h - 0.004, 0.018);
-            const doorMat = new THREE.MeshStandardMaterial({ color: tex.color, roughness: tex.roughness });
+            const doorMat = new THREE.MeshStandardMaterial({ color: tex.color });
             const door = new THREE.Mesh(doorGeo, doorMat);
             door.position.set(w / 2, h / 2, 0.009);
-            door.castShadow = true;
             doorPivot.add(door);
             group.add(doorPivot);
 
@@ -279,18 +252,11 @@
 
         function addModule(item) {
             let y = 0;
-            if (item.type.startsWith('wall')) y = 1.4;
+            if (item.type === 'wall') y = 1.4;
             if (item.type === 'countertop') y = 0.85;
 
             const mod = createModuleMesh(item, "sonoma");
-            
-            let posX = 0;
-            if (modules.length > 0) {
-                const last = modules[modules.length - 1];
-                posX = last.position.x + (last.userData.w / 2) + (item.w / 2) + 0.02;
-            } else {
-                posX = -0.8;
-            }
+            let posX = modules.length > 0 ? modules[modules.length - 1].position.x + (modules[modules.length - 1].userData.w/2) + (item.w/2) + 0.02 : -0.5;
 
             mod.position.set(posX, y, 0);
             scene.add(mod);
@@ -298,7 +264,6 @@
             selectModule(mod);
         }
 
-        // Raycasting для выбора шкафа
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
 
@@ -341,32 +306,23 @@
             selectedModule.userData.d = parseFloat(document.getElementById('prop-d').value) / 1000;
             selectedModule.userData.textureKey = document.getElementById('prop-texture').value;
 
-            rebuildModule(selectedModule);
-        }
-
-        function rebuildModule(mod) {
-            const pos = mod.position.clone();
-            const u = mod.userData;
-            scene.remove(mod);
-            modules = modules.filter(m => m !== mod);
+            const pos = selectedModule.position.clone();
+            const u = selectedModule.userData;
+            scene.remove(selectedModule);
+            modules = modules.filter(m => m !== selectedModule);
 
             const newMod = createModuleMesh(u, u.textureKey);
             newMod.position.copy(pos);
-            newMod.userData.isOpen = u.isOpen;
-            if (u.isOpen) newMod.userData.doorPivot.rotation.y = -Math.PI / 1.8;
-
             scene.add(newMod);
             modules.push(newMod);
             selectModule(newMod);
         }
 
-        let animatingDoors = [];
         function toggleDoorAnimation() {
             if (!selectedModule) return;
             const pivot = selectedModule.userData.doorPivot;
-            const target = selectedModule.userData.isOpen ? 0 : -Math.PI / 1.8;
             selectedModule.userData.isOpen = !selectedModule.userData.isOpen;
-            animatingDoors.push({ pivot, end: target });
+            pivot.rotation.y = selectedModule.userData.isOpen ? -1.8 : 0;
         }
 
         function deleteSelectedModule() {
@@ -377,19 +333,15 @@
         }
 
         function resetCamera() {
-            camera.position.set(3, 2.5, 4);
-            controls.target.set(0, 0.9, 0);
+            camera.position.set(2.5, 2.0, 3.5);
+            controls.target.set(0, 0.8, 0);
         }
 
         function generateReport() {
-            if (modules.length === 0) {
-                alert("Добавьте модули в проект");
-                return;
-            }
-            let html = `<table class="table-spec"><tr><th>№</th><th>Модуль</th><th>Размеры (мм)</th><th>Детали корпуса и фасад</th></tr>`;
+            if (modules.length === 0) { alert("Добавьте шкаф в проект"); return; }
+            let html = `<table class="table-spec"><tr><th>№</th><th>Шкаф</th><th>Размеры (мм)</th><th>Декор</th></tr>`;
             modules.forEach((m, i) => {
-                const W = Math.round(m.userData.w*1000), H = Math.round(m.userData.h*1000), D = Math.round(m.userData.d*1000);
-                html += `<tr><td>${i+1}</td><td>${m.userData.name}</td><td>${W}×${H}×${D}</td><td>Боковины: 2шт, Дно/Полка: 2шт, Фасад: ${texturesLDSP[m.userData.textureKey].name}</td></tr>`;
+                html += `<tr><td>${i+1}</td><td>${m.userData.name}</td><td>${Math.round(m.userData.w*1000)}×${Math.round(m.userData.h*1000)}×${Math.round(m.userData.d*1000)}</td><td>${texturesLDSP[m.userData.textureKey].name}</td></tr>`;
             });
             html += `</table>`;
             document.getElementById('report-content').innerHTML = html;
@@ -404,10 +356,10 @@
             doc.text("Kuhni Isfara - Specification", 14, 20);
             let y = 30;
             modules.forEach((m, i) => {
-                doc.text(`${i+1}. ${m.userData.name} - ${Math.round(m.userData.w*1000)}x${Math.round(m.userData.h*1000)}мм`, 14, y);
+                doc.text(`${i+1}. ${m.userData.name} - ${Math.round(m.userData.w*1000)}x${Math.round(m.userData.h*1000)}x${Math.round(m.userData.d*1000)}mm`, 14, y);
                 y += 10;
             });
-            doc.save("Kuhni_Isfara_Specification.pdf");
+            doc.save("Kuhni_Isfara_Project.pdf");
         }
 
         function export3D() {
@@ -416,25 +368,24 @@
                 const blob = new Blob([res], { type: 'application/octet-stream' });
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(blob);
-                link.download = 'kitchen_design.glb';
+                link.download = 'kitchen_project.glb';
                 link.click();
             }, { binary: true });
         }
 
         function animate() {
             requestAnimationFrame(animate);
-            animatingDoors.forEach(a => {
-                a.pivot.rotation.y = THREE.MathUtils.lerp(a.pivot.rotation.y, a.end, 0.2);
-            });
-            controls.update();
-            renderer.render(scene, camera);
+            if (controls) controls.update();
+            if (renderer && scene && camera) renderer.render(scene, camera);
         }
-        animate();
 
+        window.addEventListener('DOMContentLoaded', init3D);
         window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+            if (camera && renderer) {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
         });
     </script>
 </body>
