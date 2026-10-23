@@ -1,156 +1,102 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <title>3D Конструктор Кухни - Three.js</title>
-    <style>
-        body { margin: 0; overflow: hidden; font-family: sans-serif; }
-        #info {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            background: rgba(255,255,255,0.9);
-            padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        button {
-            padding: 8px 12px;
-            margin-top: 5px;
-            cursor: pointer;
-        }
-    </style>
-    <!-- Подключаем Three.js и OrbitControls -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-</head>
-<body>
+import asyncio
+import logging
+from aiogram import Bot, Dispatcher, F, types
+from aiogram.filters import CommandStart
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
-<div id="info">
-    <h2>Планировщик Кухни</h2>
-    <p>Левая кнопка мыши — вращение<br>Правая кнопка — перемещение<br>Колесико — зум</p>
-    <button onclick="addCabinet()">Добавить шкаф (60 см)</button>
-</div>
+# 1. Вставьте токен вашего бота от @BotFather:
+TOKEN = "ВАШ_ТЕЛЕГРАМ_ТОКЕН"
 
-<script>
-    // 1. Инициализация сцены, камеры и рендерера
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xf0f0f0);
+# 2. Укажите адрес вашего опубликованного на GitHub сайта:
+WEBAPP_URL = "https://ваш-логин.github.io/kuhni-isfara/"
 
-    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(200, 200, 300);
+logging.basicConfig(level=logging.INFO)
+bot = Bot(token=TOKEN)
+dp = Dispatcher()
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.shadowMap.enabled = true; // Включаем тени
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    document.body.appendChild(renderer.domElement);
 
-    // Управление камерой
-    const controls = new THREE.OrbitControls(camera, renderer.domElement);
-    controls.target.set(0, 50, 0);
-    controls.update();
+def get_main_keyboard():
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🍳 Спроектировать кухню (3D)",
+                    web_app=WebAppInfo(url=WEBAPP_URL),
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="📲 Установить приложение", callback_data="install_app"
+                ),
+                InlineKeyboardButton(text="📖 Инструкция", callback_data="guide"),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="📂 Отправить чертёж / проект", callback_data="send_project"
+                )
+            ],
+        ]
+    )
+    return keyboard
 
-    // 2. Осмысленное освещение
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-    scene.add(ambientLight);
 
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
-    dirLight.position.set(150, 250, 100);
-    dirLight.castShadow = true;
-    dirLight.shadow.mapSize.width = 2048;
-    dirLight.shadow.mapSize.height = 2048;
-    scene.add(dirLight);
+@dp.message(CommandStart())
+async def cmd_start(message: types.Message):
+    welcome_text = (
+        "👋 **Здравствуйте! Кухни Исфара 3D — профессиональный конструктор мебели.**\n\n"
+        "Задайте размеры вашей комнаты, расставьте шкафы и сразу получите:\n"
+        "• **3D-визуализацию проекта**\n"
+        "• **Полную деталировку материалов (ЛДСП/МДФ)**\n"
+        "• **Карту присадки (схемы отверстий)**\n"
+        "• **Экспорт проекта в PDF и 3D (.glb)**\n\n"
+        "🎁 **Сервис полностью бесплатен для всех пользователей!**"
+    )
+    await message.answer(
+        welcome_text, reply_markup=get_main_keyboard(), parse_mode="Markdown"
+    )
 
-    // 3. Создаем комнату (Пол и Стены)
-    // Пол
-    const floorGeo = new THREE.PlaneGeometry(400, 400);
-    const floorMat = new THREE.MeshStandardMaterial({ color: 0xdcdcdc, roughness: 0.8 });
-    const floor = new THREE.Mesh(floorGeo, floorMat);
-    floor.rotation.x = -Math.PI / 2;
-    floor.receiveShadow = true;
-    scene.add(floor);
 
-    // Сетка на полу
-    const gridHelper = new THREE.GridHelper(400, 40, 0x888888, 0xcccccc);
-    gridHelper.position.y = 0.1;
-    scene.add(gridHelper);
+@dp.callback_query(F.data == "install_app")
+async def process_install(callback: types.CallbackQuery):
+    await callback.message.answer(
+        "📲 **Как сохранить конструктор на телефон:**\n\n"
+        "1. Откройте 3D-конструктор кнопкой «Спроектировать кухню (3D)».\n"
+        "2. В верхнем меню браузера нажмите **«Добавить на главный экран»**.\n"
+        "3. Теперь редактор будет открываться как отдельное приложение!"
+    )
+    await callback.answer()
 
-    // Задняя стена
-    const wallGeo = new THREE.PlaneGeometry(400, 250);
-    const wallMat = new THREE.MeshStandardMaterial({ color: 0xf5f5f5 });
-    const wall = new THREE.Mesh(wallGeo, wallMat);
-    wall.position.set(0, 125, -200);
-    wall.receiveShadow = true;
-    scene.add(wall);
 
-    // 4. Функция создания параметров кухонного шкафа
-    const cabinets = [];
-    let cabinetOffset = -120; // Смещение для расстановки вдоль стены
+@dp.callback_query(F.data == "guide")
+async def process_guide(callback: types.CallbackQuery):
+    await callback.message.answer(
+        "📖 **Инструкция по работе с 3D-конструктором:**\n\n"
+        "1. Нажмите **«Спроектировать кухню (3D)»**.\n"
+        "2. Добавляйте нижние, верхние шкафы или пеналы.\n"
+        "3. Нажмите на любой шкаф на сцене, чтобы изменить его ширину, высоту или цвет фасада.\n"
+        "4. Нажмите **«Спецификация / Раскрой»**, чтобы получить полную раскладку деталей и карту сверления отверстий."
+    )
+    await callback.answer()
 
-    function createCabinet(width = 60, height = 85, depth = 60) {
-        const cabinetGroup = new THREE.Group();
 
-        // Материалы
-        const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.5 }); // Каркас
-        const facadeMaterial = new THREE.MeshStandardMaterial({ color: 0x2c5d88, roughness: 0.3 }); // Фасад
-        const countertopMaterial = new THREE.MeshStandardMaterial({ color: 0xe0e0e0, roughness: 0.2, metalness: 0.1 }); // Столешница
+@dp.callback_query(F.data == "send_project")
+async def process_send(callback: types.CallbackQuery):
+    await callback.message.answer(
+        "📂 Вы можете прислать сюда ваши файлы проектов (.glb, .pdf) или фото вашего помещения!"
+    )
+    await callback.answer()
 
-        // 1. Корпус (без верхней крышки)
-        const bodyGeo = new THREE.BoxGeometry(width, height - 4, depth - 2);
-        const body = new THREE.Mesh(bodyGeo, bodyMaterial);
-        body.position.y = (height - 4) / 2;
-        body.castShadow = true;
-        body.receiveShadow = true;
-        cabinetGroup.add(body);
 
-        // 2. Фасад (дверца)
-        const doorGeo = new THREE.BoxGeometry(width - 0.4, height - 5, 2);
-        const door = new THREE.Mesh(doorGeo, facadeMaterial);
-        door.position.set(0, (height - 4) / 2, depth / 2 - 1);
-        door.castShadow = true;
-        cabinetGroup.add(door);
+# Приём любых документов и файлов от пользователей (чертежи, 3D-модели)
+@dp.message(F.document)
+async def handle_docs(message: types.Message):
+    await message.reply("✅ Ваш проектный файл успешно получен!")
 
-        // 3. Столешница
-        const topGeo = new THREE.BoxGeometry(width, 4, depth);
-        const top = new THREE.Mesh(topGeo, countertopMaterial);
-        top.position.y = height - 2;
-        top.castShadow = true;
-        top.receiveShadow = true;
-        cabinetGroup.add(top);
 
-        return cabinetGroup;
-    }
+async def main():
+    print("Бот kuhniisfara_bot успешно запущен!")
+    await dp.start_polling(bot)
 
-    // Добавление шкафа на сцену
-    function addCabinet() {
-        if (cabinetOffset > 120) return; // Ограничение по ширине
 
-        const cabinet = createCabinet(60, 85, 60);
-        cabinet.position.set(cabinetOffset, 0, -200 + 30); // Позиция у стены
-        scene.add(cabinet);
-        cabinets.push(cabinet);
-
-        cabinetOffset += 60.5; // Смещение на ширину + небольшая щель
-    }
-
-    // Создадим первые два шкафа при старте
-    addCabinet();
-    addCabinet();
-
-    // 5. Цикл рендеринга и адаптивность
-    function animate() {
-        requestAnimationFrame(animate);
-        renderer.render(scene, camera);
-    }
-    animate();
-
-    window.addEventListener('resize', () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-    });
-</script>
-
-</body>
-</html>
+if __name__ == "__main__":
+    asyncio.run(main())
