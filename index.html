@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>3D Конструктор Кухонь — Кухни Исфара</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; overflow: hidden; background: #1a1a1a; color: #fff; }
+        #canvas-container { width: 100vw; height: 100vh; }
+        
+        /* Верхняя панель управления */
+        #top-bar {
+            position: absolute; top: 10px; left: 10px; right: 10px;
+            display: flex; gap: 8px; overflow-x: auto; padding-bottom: 5px;
+            z-index: 10;
+        }
+        .btn {
+            background: #2c2c2e; color: #fff; border: 1px solid #444;
+            padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 600;
+            cursor: pointer; white-space: nowrap; display: flex; align-items: center; gap: 6px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3); transition: background 0.2s;
+        }
+        .btn:active { background: #3a3a3c; }
+        .btn-primary { background: #007aff; border-color: #007aff; }
+        .btn-success { background: #34c759; border-color: #34c759; }
+
+        /* Панель настройки выбранного модуля */
+        #properties-panel {
+            position: absolute; bottom: 20px; left: 10px; right: 10px;
+            background: rgba(30, 30, 30, 0.92); backdrop-filter: blur(10px);
+            border: 1px solid #333; border-radius: 12px; padding: 14px;
+            display: none; z-index: 10; max-height: 40vh; overflow-y: auto;
+        }
+        #properties-panel h4 { margin-bottom: 8px; font-size: 15px; color: #34c759; }
+        .prop-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin-bottom: 10px; }
+        .prop-group { display: flex; flex-direction: column; gap: 4px; }
+        .prop-group label { font-size: 11px; color: #aaa; }
+        .prop-group input, .prop-group select {
+            background: #2a2a2a; border: 1px solid #444; color: #fff;
+            padding: 6px; border-radius: 6px; font-size: 13px;
+        }
+
+        /* Модальное окно деталей/калькуляции */
+        #report-modal {
+            position: absolute; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);
+            display: none; flex-direction: column; padding: 20px; z-index: 100;
+        }
+        #report-content { background: #222; border-radius: 12px; padding: 16px; flex: 1; overflow-y: auto; margin-bottom: 12px; font-family: monospace; font-size: 12px; line-height: 1.5; }
+        .table-spec { width: 100%; border-collapse: collapse; margin-top: 10px; text-align: left; }
+        .table-spec th, .table-spec td { border: 1px solid #444; padding: 6px; }
+        .table-spec th { background: #333; }
+    </style>
+    <!-- Подключение библиотеки визуализации Three.js и генераторов -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/GLTFExporter.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+
+    <div id="top-bar">
+        <button class="btn btn-primary" onclick="addModule('base')">➕ Нижний шкаф</button>
+        <button class="btn btn-primary" onclick="addModule('wall')">➕ Верхний шкаф</button>
+        <button class="btn btn-primary" onclick="addModule('tall')">➕ Пенал</button>
+        <button class="btn" onclick="clearScene()">🗑️ Очистить</button>
+        <button class="btn btn-success" onclick="generateReport()">📋 Спецификация / Раскрой</button>
+        <button class="btn" onclick="export3D()">💾 3D (.glb)</button>
+    </div>
+
+    <div id="properties-panel">
+        <h4 id="mod-title">Модуль выбран</h4>
+        <div class="prop-grid">
+            <div class="prop-group">
+                <label>Ширина (мм)</label>
+                <input type="number" id="prop-w" step="50" onchange="updateSelectedModule()">
+            </div>
+            <div class="prop-group">
+                <label>Высота (мм)</label>
+                <input type="number" id="prop-h" step="50" onchange="updateSelectedModule()">
+            </div>
+            <div class="prop-group">
+                <label>Глубина (мм)</label>
+                <input type="number" id="prop-d" step="50" onchange="updateSelectedModule()">
+            </div>
+            <div class="prop-group">
+                <label>Цвет фасада</label>
+                <select id="prop-color" onchange="updateSelectedModule()">
+                    <option value="#e6d7c3">Дуб Сонома</option>
+                    <option value="#5c4033">Венге</option>
+                    <option value="#ffffff">Белый глянец</option>
+                    <option value="#708090">Серый матовый</option>
+                </select>
+            </div>
+        </div>
+        <button class="btn" style="background:#ff3b30; border:none; width:100%; justify-content:center;" onclick="deleteSelectedModule()">Удалить модуль</button>
+    </div>
+
+    <!-- Модальное окно отчёта -->
+    <div id="report-modal">
+        <h3 style="margin-bottom: 10px;">📋 Отчёт: Спецификация и Раскрой</h3>
+        <div id="report-content"></div>
+        <div style="display:flex; gap:10px;">
+            <button class="btn btn-primary" style="flex:1; justify-content:center;" onclick="downloadPDF()">Скачать PDF отчёт</button>
+            <button class="btn" style="flex:1; justify-content:center;" onclick="closeReport()">Закрыть</button>
+        </div>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <script>
+        // Инициализация Three.js
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1e1e1e);
+
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(2.5, 2.0, 3.5);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.target.set(0, 0.8, 0);
+
+        // Свет
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+        dirLight.position.set(5, 8, 5);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
+
+        // Пол и Стены
+        const grid = new THREE.GridHelper(6, 12, 0x444444, 0x222222);
+        grid.position.y = 0;
+        scene.add(grid);
+
+        // Список модулей
+        let modules = [];
+        let selectedModule = null;
+
+        // Генерация геометрического шкафа
+        function createModuleMesh(w, h, d, type, colorHex) {
+            const group = new THREE.Group();
+            
+            // Каркас (ЛДСП 16мм)
+            const bodyGeo = new THREE.BoxGeometry(w, h, d);
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.5 });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.y = h / 2;
+            body.castShadow = true;
+            body.receiveShadow = true;
+            group.add(body);
+
+            // Фасад
+            const doorGeo = new THREE.BoxGeometry(w - 0.004, h - 0.004, 0.018);
+            const doorMat = new THREE.MeshStandardMaterial({ color: parseInt(colorHex.replace('#','0x')), roughness: 0.2 });
+            const door = new THREE.Mesh(doorGeo, doorMat);
+            door.position.set(0, h / 2, d / 2 + 0.009);
+            group.add(door);
+
+            group.userData = { w: w, h: h, d: d, type: type, color: colorHex };
+            return group;
+        }
+
+        // Добавление модуля
+        function addModule(type) {
+            let w = 0.6, h = 0.85, d = 0.6, y = 0;
+            if (type === 'wall') { w = 0.6; h = 0.72; d = 0.35; y = 1.4; }
+            if (type === 'tall') { w = 0.6; h = 2.1; d = 0.6; y = 0; }
+
+            const mod = createModuleMesh(w, h, d, type, "#e6d7c3");
+            
+            // Автомонтаж (Snapping в ряд)
+            let posX = 0;
+            if (modules.length > 0) {
+                const last = modules[modules.length - 1];
+                posX = last.position.x + (last.userData.w / 2) + (w / 2);
+            } else {
+                posX = -1.0;
+            }
+            
+            mod.position.set(posX, y, 0);
+            scene.add(mod);
+            modules.push(mod);
+            selectModule(mod);
+        }
+
+        // Выбор модуля кликом
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        window.addEventListener('pointerdown', (e) => {
+            if (e.target.tagName !== 'CANVAS') return;
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(scene.children, true);
+            
+            if (intersects.length > 0) {
+                let obj = intersects[0].object;
+                while (obj.parent && obj.parent !== scene) {
+                    obj = obj.parent;
+                }
+                if (modules.includes(obj)) {
+                    selectModule(obj);
+                    return;
+                }
+            }
+            unselectModule();
+        });
+
+        function selectModule(mod) {
+            selectedModule = mod;
+            document.getElementById('properties-panel').style.display = 'block';
+            document.getElementById('mod-title').innerText = `Настройка модуля (${Math.round(mod.userData.w*1000)}x${Math.round(mod.userData.h*1000)}x${Math.round(mod.userData.d*1000)} мм)`;
+            document.getElementById('prop-w').value = Math.round(mod.userData.w * 1000);
+            document.getElementById('prop-h').value = Math.round(mod.userData.h * 1000);
+            document.getElementById('prop-d').value = Math.round(mod.userData.d * 1000);
+            document.getElementById('prop-color').value = mod.userData.color;
+        }
+
+        function unselectModule() {
+            selectedModule = null;
+            document.getElementById('properties-panel').style.display = 'none';
+        }
+
+        function updateSelectedModule() {
+            if (!selectedModule) return;
+            const w = parseFloat(document.getElementById('prop-w').value) / 1000;
+            const h = parseFloat(document.getElementById('prop-h').value) / 1000;
+            const d = parseFloat(document.getElementById('prop-d').value) / 1000;
+            const color = document.getElementById('prop-color').value;
+
+            const posX = selectedModule.position.x;
+            const posY = selectedModule.position.y;
+            const posZ = selectedModule.position.z;
+            const type = selectedModule.userData.type;
+
+            scene.remove(selectedModule);
+            modules = modules.filter(m => m !== selectedModule);
+
+            const newMod = createModuleMesh(w, h, d, type, color);
+            newMod.position.set(posX, posY, posZ);
+            scene.add(newMod);
+            modules.push(newMod);
+            selectModule(newMod);
+        }
+
+        function deleteSelectedModule() {
+            if (!selectedModule) return;
+            scene.remove(selectedModule);
+            modules = modules.filter(m => m !== selectedModule);
+            unselectModule();
+        }
+
+        function clearScene() {
+            modules.forEach(m => scene.remove(m));
+            modules = [];
+            unselectModule();
+        }
+
+        // Генерация спецификации, деталей и присадки (Раскрой)
+        function generateReport() {
+            if (modules.length === 0) {
+                alert("Сначала добавьте хотя бы один модуль в проект.");
+                return;
+            }
+
+            let html = `<h4>ПРОЕКТ КУХНИ: ДЕТАЛИРОВКА И ПРИСАДКА</h4>`;
+            html += `<p>Всего модулей: ${modules.length}</p>`;
+            html += `<table class="table-spec">
+                <tr>
+                    <th>Тип модуля</th>
+                    <th>Габариты (мм)</th>
+                    <th>Деталировка (ЛДСП 16мм)</th>
+                    <th>Карта присадки</th>
+                </tr>`;
+
+            modules.forEach((m, idx) => {
+                const W = Math.round(m.userData.w * 1000);
+                const H = Math.round(m.userData.h * 1000);
+                const D = Math.round(m.userData.d * 1000);
+
+                // Расчет деталей
+                const sideH = H;
+                const sideD = D;
+                const botW = W - 32; // минус 2 боковины по 16мм
+                const doorW = W - 4;
+                const doorH = H - 4;
+
+                html += `<tr>
+                    <td><b>Модуль #${idx+1} (${m.userData.type})</b></td>
+                    <td>${W} x ${H} x ${D}</td>
+                    <td>
+                        - Боковины: 2 шт (размер: ${sideH} x ${sideD} мм)<br>
+                        - Дно/Полка: 2 шт (размер: ${botW} x ${sideD} мм)<br>
+                        - Фасад: 1 шт (размер: ${doorH} x ${doorW} мм)<br>
+                        - ДВП Задник: 1 шт (${H-2} x ${W-2} мм)
+                    </td>
+                    <td>
+                        - Отверстия под конфирмат: 8 шт (50мм от края)<br>
+                        - Шканты: 8 шт<br>
+                        - Запил под петли фасада: 2 чашки Ø35мм
+                    </td>
+                </tr>`;
+            });
+
+            html += `</table>`;
+            document.getElementById('report-content').innerHTML = html;
+            document.getElementById('report-modal').style.display = 'flex';
+        }
+
+        function closeReport() {
+            document.getElementById('report-modal').style.display = 'none';
+        }
+
+        // Скачивание отчёта в PDF
+        function downloadPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            doc.text("ОТЧЕТ 3D КОНСТРУКТОРА КУХНИ", 10, 10);
+            doc.text(`Количество модулей: ${modules.length}`, 10, 20);
+            
+            let y = 30;
+            modules.forEach((m, i) => {
+                const W = Math.round(m.userData.w * 1000);
+                const H = Math.round(m.userData.h * 1000);
+                const D = Math.round(m.userData.d * 1000);
+                doc.text(`${i+1}. Модуль ${m.userData.type}: ${W}x${H}x${D} мм`, 10, y);
+                y += 10;
+            });
+
+            doc.save("Project_Kitchen_Isfara.pdf");
+        }
+
+        // Экспорт в 3D (.glb)
+        function export3D() {
+            const exporter = new THREE.GLTFExporter();
+            exporter.parse(scene, function (result) {
+                const blob = new Blob([result], { type: 'application/octet-stream' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = 'kitchen_project.glb';
+                link.click();
+            }, { binary: true });
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
