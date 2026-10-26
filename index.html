@@ -1,327 +1,338 @@
 <!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Конструктор Кухонь — Кухни Исфара</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
-        body, html { width: 100%; height: 100%; overflow: hidden; background: #181818; color: #fff; font-family: sans-serif; }
-        #canvas-container { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; }
-
-        /* Верхняя панель категорий */
-        #catalog-tabs {
-            position: absolute; top: 10px; left: 10px; right: 10px;
-            display: flex; gap: 6px; overflow-x: auto; padding-bottom: 5px;
-            z-index: 10;
-        }
-        .tab-btn {
-            background: rgba(30, 30, 30, 0.9); color: #fff; border: 1px solid #444; padding: 8px 14px;
-            border-radius: 8px; font-size: 12px; font-weight: bold; cursor: pointer; white-space: nowrap;
-        }
-        .tab-btn.active { background: #007aff; border-color: #007aff; }
-
-        /* Подкатегории */
-        #sub-catalog {
-            position: absolute; top: 55px; left: 10px; right: 10px;
-            background: rgba(20, 20, 20, 0.95); border: 1px solid #333; border-radius: 10px; padding: 8px;
-            display: flex; gap: 8px; overflow-x: auto; z-index: 10;
-        }
-        .item-card {
-            background: #2a2a2a; border: 1px solid #444; border-radius: 6px;
-            padding: 8px 12px; font-size: 11px; cursor: pointer; text-align: center; min-width: 100px; white-space: nowrap;
-        }
-        .item-card b { display: block; color: #34c759; margin-bottom: 2px; }
-
-        /* Панель свойств снизу */
-        #properties-panel {
-            position: absolute; bottom: 15px; left: 10px; right: 10px;
-            background: rgba(24, 24, 24, 0.95); border: 1px solid #444; border-radius: 12px; padding: 12px;
-            display: none; z-index: 20;
-        }
-        #properties-panel h4 { margin-bottom: 8px; font-size: 13px; color: #34c759; display: flex; justify-content: space-between; }
-        .prop-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px; margin-bottom: 10px; }
-        .prop-group { display: flex; flex-direction: column; gap: 2px; }
-        .prop-group label { font-size: 10px; color: #aaa; }
-        .prop-group input, .prop-group select {
-            background: #1a1a1a; border: 1px solid #444; color: #fff; padding: 5px; border-radius: 4px; font-size: 12px;
-        }
-        .btn-action { padding: 8px; border-radius: 6px; border: none; font-weight: bold; font-size: 12px; cursor: pointer; flex: 1; }
-        .btn-del { background: #ff3b30; color: #fff; }
-        .btn-door { background: #ff9500; color: #000; }
-
-        /* Модальное окно */
-        #report-modal {
-            position: absolute; inset: 0; background: rgba(0,0,0,0.9);
-            display: none; flex-direction: column; padding: 20px; z-index: 100;
-        }
-        #report-content { background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 12px; flex: 1; overflow-y: auto; margin-bottom: 10px; font-family: monospace; font-size: 11px; }
-        .table-spec { width: 100%; border-collapse: collapse; text-align: left; }
-        .table-spec th, .table-spec td { border: 1px solid #333; padding: 6px; }
-        .table-spec th { background: #222; color: #34c759; }
-    </style>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/GLTFExporter.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-</head>
-<body>
-
-    <div id="catalog-tabs">
-        <button class="tab-btn active" onclick="switchTab('base', this)">🍳 Нижние</button>
-        <button class="tab-btn" onclick="switchTab('wall', this)">☁️ Верхние</button>
-        <button class="tab-btn" onclick="switchTab('tall', this)">🏛️ Пеналы</button>
-        <button class="tab-btn" onclick="generateReport()">📋 Спецификация</button>
-    </div>
-
-    <div id="sub-catalog"></div>
-
-    <div id="properties-panel">
-        <h4>Редактирование модуля <span onclick="unselectModule()" style="cursor:pointer;">✕</span></h4>
-        <div class="prop-grid">
-            <div class="prop-group">
-                <label>Ширина (мм)</label>
-                <input type="number" id="prop-w" step="50" onchange="updateModuleProps()">
-            </div>
-            <div class="prop-group">
-                <label>Высота (мм)</label>
-                <input type="number" id="prop-h" step="50" onchange="updateModuleProps()">
-            </div>
-            <div class="prop-group">
-                <label>Глубина (мм)</label>
-                <input type="number" id="prop-d" step="50" onchange="updateModuleProps()">
-            </div>
-            <div class="prop-group">
-                <label>Декор ЛДСП</label>
-                <select id="prop-texture" onchange="updateModuleProps()">
-                    <option value="sonoma">Дуб Сонома</option>
-                    <option value="wotan">Дуб Вотан</option>
-                    <option value="white_gloss">Белый глянец</option>
-                    <option value="graphite">Графит</option>
-                    <option value="wenge">Венге</option>
-                </select>
-            </div>
-        </div>
-        <div style="display:flex; gap:8px;">
-            <button class="btn-action btn-door" onclick="toggleDoorAnimation()">🚪 Дверь открыть/закрыть</button>
-            <button class="btn-action btn-del" onclick="deleteSelectedModule()">Удалить</button>
-        </div>
-    </div>
-
-    <div id="report-modal">
-        <h3 style="margin-bottom: 10px; color:#34c759;">📋 Спецификация и раскрой</h3>
-        <div id="report-content"></div>
-        <button onclick="closeReport()" style="padding:10px; background:#007aff; color:#fff; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">Закрыть</button>
-    </div>
-
-    <div id="canvas-container"></div>
-
-    <script>
-        let scene, camera, renderer, controls;
-        let modules = [];
-        let selectedModule = null;
-
-        const texturesLDSP = {
-            sonoma: { color: 0xd2b59b, name: "Дуб Сонома" },
-            wotan: { color: 0x8b5a2b, name: "Дуб Вотан" },
-            white_gloss: { color: 0xffffff, name: "Белый глянец" },
-            graphite: { color: 0x383838, name: "Графит" },
-            wenge: { color: 0x3d2817, name: "Венге" }
-        };
-
-        const catalogItems = {
-            base: [
-                { name: "Шкаф распашной", w: 0.6, h: 0.85, d: 0.6, type: "base" },
-                { name: "Шкаф с ящиками", w: 0.6, h: 0.85, d: 0.6, type: "base" },
-                { name: "Шкаф под мойку", w: 0.8, h: 0.85, d: 0.6, type: "base" }
-            ],
-            wall: [
-                { name: "Верхний шкаф", w: 0.6, h: 0.72, d: 0.35, type: "wall" }
-            ],
-            tall: [
-                { name: "Пенал", w: 0.6, h: 2.1, d: 0.6, type: "tall" }
-            ]
-        };
-
-        function init3D() {
-            const container = document.getElementById('canvas-container');
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x1e1e1e);
-
-            camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, 1.5, 3.5);
-
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
-            container.appendChild(renderer.domElement);
-
-            controls = new THREE.OrbitControls(camera, renderer.domElement);
-            controls.target.set(0, 0.5, 0);
-            controls.update();
-
-            scene.add(new THREE.AmbientLight(0xffffff, 0.9));
-            const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
-            dirLight.position.set(5, 10, 7);
-            scene.add(dirLight);
-
-            const grid = new THREE.GridHelper(10, 20, 0x555555, 0x333333);
-            scene.add(grid);
-
-            animate();
-            switchTab('base', document.querySelector('.tab-btn'));
-        }
-
-        function switchTab(tabKey, btn) {
-            if (btn) {
-                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-            }
-            const sub = document.getElementById('sub-catalog');
-            sub.innerHTML = '';
-            if (!catalogItems[tabKey]) return;
-
-            catalogItems[tabKey].forEach(item => {
-                const card = document.createElement('div');
-                card.className = 'item-card';
-                card.innerHTML = `<b>${item.name}</b>${Math.round(item.w*1000)}×${Math.round(item.h*1000)} мм`;
-                card.onclick = () => addModule(item);
-                sub.appendChild(card);
-            });
-        }
-
-        function createModuleMesh(item, textureKey) {
-            const group = new THREE.Group();
-            const w = item.w, h = item.h, d = item.d;
-
-            const bodyGeo = new THREE.BoxGeometry(w, h, d);
-            const bodyMat = new THREE.MeshStandardMaterial({ color: 0xe0e0e0, roughness: 0.5 });
-            const body = new THREE.Mesh(bodyGeo, bodyMat);
-            body.position.y = h / 2;
-            group.add(body);
-
-            const doorPivot = new THREE.Group();
-            doorPivot.position.set(-w / 2, 0, d / 2);
-
-            const tex = texturesLDSP[textureKey] || texturesLDSP.sonoma;
-            const doorGeo = new THREE.BoxGeometry(w - 0.004, h - 0.004, 0.018);
-            const doorMat = new THREE.MeshStandardMaterial({ color: tex.color, roughness: 0.3 });
-            const door = new THREE.Mesh(doorGeo, doorMat);
-            door.position.set(w / 2, h / 2, 0.009);
-            doorPivot.add(door);
-            group.add(doorPivot);
-
-            group.userData = { ...item, textureKey, isOpen: false, doorPivot };
-            return group;
-        }
-
-        function addModule(item) {
-            let y = 0;
-            if (item.type === 'wall') y = 1.4;
-
-            const mod = createModuleMesh(item, "sonoma");
-            mod.position.set(0, y, 0); // Ставим строго по центру сетки, чтобы сразу было видно!
-            
-            scene.add(mod);
-            modules.push(mod);
-            selectModule(mod);
-        }
-
-        const raycaster = new THREE.Raycaster();
-        const mouse = new THREE.Vector2();
-
-        window.addEventListener('pointerdown', (e) => {
-            if (e.target.tagName !== 'CANVAS') return;
-            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-            
-            raycaster.setFromCamera(mouse, camera);
-            const intersects = raycaster.intersectObjects(scene.children, true);
-            
-            if (intersects.length > 0) {
-                let obj = intersects[0].object;
-                while (obj.parent && obj.parent !== scene) obj = obj.parent;
-                if (modules.includes(obj)) {
-                    selectModule(obj);
-                    return;
-                }
-            }
-        });
-
-        function selectModule(mod) {
-            selectedModule = mod;
-            document.getElementById('properties-panel').style.display = 'block';
-            document.getElementById('prop-w').value = Math.round(mod.userData.w * 1000);
-            document.getElementById('prop-h').value = Math.round(mod.userData.h * 1000);
-            document.getElementById('prop-d').value = Math.round(mod.userData.d * 1000);
-            document.getElementById('prop-texture').value = mod.userData.textureKey;
-        }
-
-        function unselectModule() {
-            selectedModule = null;
-            document.getElementById('properties-panel').style.display = 'none';
-        }
-
-        function updateModuleProps() {
-            if (!selectedModule) return;
-            selectedModule.userData.w = parseFloat(document.getElementById('prop-w').value) / 1000;
-            selectedModule.userData.h = parseFloat(document.getElementById('prop-h').value) / 1000;
-            selectedModule.userData.d = parseFloat(document.getElementById('prop-d').value) / 1000;
-            selectedModule.userData.textureKey = document.getElementById('prop-texture').value;
-
-            const pos = selectedModule.position.clone();
-            const u = selectedModule.userData;
-            scene.remove(selectedModule);
-            modules = modules.filter(m => m !== selectedModule);
-
-            const newMod = createModuleMesh(u, u.textureKey);
-            newMod.position.copy(pos);
-            scene.add(newMod);
-            modules.push(newMod);
-            selectModule(newMod);
-        }
-
-        function toggleDoorAnimation() {
-            if (!selectedModule) return;
-            const pivot = selectedModule.userData.doorPivot;
-            selectedModule.userData.isOpen = !selectedModule.userData.isOpen;
-            pivot.rotation.y = selectedModule.userData.isOpen ? -1.8 : 0;
-        }
-
-        function deleteSelectedModule() {
-            if (!selectedModule) return;
-            scene.remove(selectedModule);
-            modules = modules.filter(m => m !== selectedModule);
-            unselectModule();
-        }
-
-        function generateReport() {
-            if (modules.length === 0) { alert("Добавьте шкаф"); return; }
-            let html = `<table class="table-spec"><tr><th>№</th><th>Шкаф</th><th>Размеры (мм)</th></tr>`;
-            modules.forEach((m, i) => {
-                html += `<tr><td>${i+1}</td><td>${m.userData.name}</td><td>${Math.round(m.userData.w*1000)}×${Math.round(m.userData.h*1000)}×${Math.round(m.userData.d*1000)}</td></tr>`;
-            });
-            html += `</table>`;
-            document.getElementById('report-content').innerHTML = html;
-            document.getElementById('report-modal').style.display = 'flex';
-        }
-
-        function closeReport() { document.getElementById('report-modal').style.display = 'none'; }
-
-        function animate() {
-            requestAnimationFrame(animate);
-            if (controls) controls.update();
-            if (renderer && scene && camera) renderer.render(scene, camera);
-        }
-
-        window.addEventListener('DOMContentLoaded', init3D);
-        window.addEventListener('resize', () => {
-            if (camera && renderer) {
-                camera.aspect = window.innerWidth / window.innerHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
-            }
-        });
-    </script>
-</body>
-</html>
+<html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>3D Конструктор Кухонь Pro</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+:root{--bg:#eef1f5;--pn:#fff;--tx:#14213d;--mu:#667085;--ac:#1d4ed8;--bd:#cfd6e0;--in:#f6f8fb;--v3:#dfe5ee}
+@media(prefers-color-scheme:dark){:root{--bg:#0c1424;--pn:#121d33;--tx:#e6ebf4;--mu:#8fa1bd;--ac:#5b8cff;--bd:#263652;--in:#0c1424;--v3:#0f1a2e}}
+*{box-sizing:border-box}html,body{height:100%;margin:0}
+body{display:flex;flex-direction:column;font:13px/1.4 "Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--tx)}
+header{display:flex;align-items:center;gap:12px;padding:8px 14px;background:var(--pn);border-bottom:1px solid var(--bd);flex-wrap:wrap}
+h1{font-size:15px;margin:0;font-weight:700}.sp{flex:1}
+button,select,input,textarea{font:inherit;color:var(--tx)}
+button{background:var(--in);border:1px solid var(--bd);border-radius:6px;padding:6px 10px;cursor:pointer}
+button:hover{border-color:var(--ac)}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--ac)}
+button.p{background:var(--ac);border-color:var(--ac);color:#fff;font-weight:600}
+input,select,textarea{background:var(--in);border:1px solid var(--bd);border-radius:6px;padding:5px 7px;width:100%}
+input:disabled{opacity:.5}
+main{flex:1;display:flex;min-height:0}aside{width:290px;background:var(--pn);padding:12px;overflow:auto;flex-shrink:0}
+#L{border-right:1px solid var(--bd)}#Rr{border-left:1px solid var(--bd)}
+#cv{flex:1;position:relative;background:var(--v3);min-width:0}#cv canvas{display:block}
+.fl{position:absolute;left:10px;bottom:10px;display:flex;gap:6px}
+h3{font-size:12px;margin:14px 0 6px;color:var(--mu)}h3:first-child{margin-top:0}
+.g{display:grid;grid-template-columns:1fr 1fr;gap:6px}.g button{text-align:left}.g small{display:block;color:var(--mu)}
+label{display:block;color:var(--mu);margin:8px 0 3px}
+#dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px}
+.bt{display:inline-block;background:var(--ac);color:#fff;padding:6px 12px;border-radius:6px;text-decoration:none;font-weight:600}
+.mo{position:fixed;inset:0;background:#0009;display:none;align-items:center;justify-content:center;padding:14px;z-index:9}
+.mo>div{background:var(--pn);border-radius:10px;max-width:1040px;width:100%;max-height:92vh;display:flex;flex-direction:column}
+.mh{display:flex;gap:8px;padding:10px 14px;border-bottom:1px solid var(--bd);align-items:center}
+.mb{overflow:auto;padding:14px}
+.rp{background:#fff;color:#111;padding:22px;font:12px/1.35 "Segoe UI",system-ui,sans-serif}
+.rp h2{margin:0 0 4px;font-size:18px}.rp h4{margin:16px 0 5px;font-size:13px}
+.rp table{width:100%;border-collapse:collapse}.rp th,.rp td{border:1px solid #bbb;padding:3px 6px;text-align:left}.rp th{background:#e8edf5}
+@media(max-width:900px){main{flex-direction:column}aside{width:auto;max-height:34vh}#cv{min-height:320px}}
+</style></head><body>
+<header><h1>3D Конструктор Кухонь Pro</h1>
+<span><i id="dot"></i><span id="st"></span></span><b id="ms"></b><span class="sp"></span>
+<button onclick="undo()" title="Ctrl+Z">Отменить</button><button onclick="clearAll()">Сбросить</button>
+<button onclick="openPj()">Проект</button><button class="p" onclick="$('rn').style.display='flex'">Рендер</button><button class="p" onclick="openRep()">Ведомость и отчёт</button></header>
+<main>
+<aside id="L">
+<h3>Планировка (шаблоны с техникой)</h3><div class="g"><button onclick="preset('I')">Прямая</button><button onclick="preset('L')">Г-образная</button><button onclick="preset('U')">П-образная</button></div>
+<label>Стена для новых модулей</label><select id="wl"><option value="A">Задняя</option><option value="B">Левая</option><option value="C">Правая</option></select>
+<label>Угловой модуль ставить</label><select id="cs"><option value="L">в левый угол</option><option value="R">в правый угол</option></select>
+<h3>Нижние: корпус 720, всего 858 мм со столешницей</h3><div class="g" id="c1"></div>
+<h3>Верхние (низ на 1420 мм)</h3><div class="g" id="c2"></div>
+<h3>Пеналы (2040 + ножки 100 = 2140 мм)</h3><div class="g" id="c3"></div>
+<h3>Техника</h3><div class="g" id="c4"></div>
+<button style="width:100%;margin-top:10px" onclick="arrange()">Выровнять вдоль стены без пересечений</button>
+<h3>Помещение, мм</h3>
+<label>Длина стены</label><input type="number" id="rw" step="100" onchange="setRoom()">
+<label>Глубина</label><input type="number" id="rd" step="100" onchange="setRoom()">
+<label>Высота потолка</label><input type="number" id="rh" step="100" onchange="setRoom()">
+<h3>Материалы</h3><label>Фасады</label><select id="mf" onchange="setMat()"></select>
+<label>Корпус</label><select id="mb" onchange="setMat()"></select>
+<label>Столешница</label><select id="mt" onchange="setMat()"></select>
+</aside>
+<div id="cv"><div class="fl"><button onclick="resetCam()">Сброс вида</button><button onclick="toggleOpen()">Открыть/закрыть фасады</button></div></div>
+<aside id="Rr"><h3>Свойства модуля</h3>
+<p id="ns" style="color:var(--mu)">Нажмите на модуль в сцене, чтобы изменить размеры и положение.</p>
+<div id="ctl" hidden>
+<label>Название</label><input id="nm" onchange="upd()">
+<div class="g"><div><label>Ширина</label><input type="number" id="w" step="10" min="200" max="1200" onchange="upd()"></div>
+<div><label>Глубина</label><input type="number" id="d" step="10" min="250" max="700" onchange="upd()"></div>
+<div><label>Высота</label><input type="number" id="h" step="10" min="300" max="2400" onchange="upd()"></div>
+<div><label>Полки</label><input type="number" id="sh" min="0" max="5" onchange="upd()"></div></div>
+<label>Стена</label><select id="iw" onchange="upd()"><option value="A">Задняя</option><option value="B">Левая</option><option value="C">Правая</option></select>
+<label>Позиция вдоль стены, мм</label><input type="number" id="xn" step="10" onchange="setX(+this.value)">
+<input type="range" id="xr" step="10" oninput="setX(+this.value,1)" style="padding:0;margin-top:6px">
+<div id="apb" hidden><label>Модель техники</label><select id="ia" onchange="setAp(+this.value)"></select></div>
+<div id="hb" hidden><label>Варочная панель на столешнице</label><select id="ih" onchange="setHob(+this.value)"></select></div>
+<div id="hdb" hidden><label>Вытяжка, врезка в шкаф</label><select id="ik" onchange="setHd(+this.value)"></select></div>
+<div class="g" style="margin-top:12px"><button onclick="dup()">Дублировать</button><button onclick="del()" style="color:#dc2626">Удалить</button></div>
+</div></aside></main>
+<div class="mo" id="rm"><div><div class="mh"><b>Производственная ведомость</b><span class="sp"></span><button class="p" onclick="pdf()">Скачать PDF</button><button onclick="cl('rm')">Закрыть</button></div><div class="mb"><div class="rp" id="rb"></div></div></div></div>
+<div class="mo" id="pm"><div><div class="mh"><b>Проект (JSON)</b><span class="sp"></span><button class="p" onclick="loadPj()">Применить</button><button onclick="cl('pm')">Закрыть</button></div><div class="mb"><textarea id="pj" rows="16" style="font-family:monospace"></textarea><p style="color:var(--mu)">Скопируйте текст, чтобы сохранить проект, или вставьте сохранённый и нажмите «Применить». Автосохранение в браузере включено.</p></div></div></div>
+<div class="mo" id="rn"><div><div class="mh"><b>Рендер</b><span class="sp"></span><button onclick="cl('rn')">Закрыть</button></div><div class="mb">
+<p style="color:var(--mu);margin-top:0">Рендер делается с текущего ракурса: закройте окно, выберите вид мышью (при желании откройте фасады), затем откройте окно снова. Сцена считается прямо в браузере, бесплатно и без аккаунтов.</p>
+<div class="g"><div><label>Разрешение (по ширине)</label><select id="rs"><option value="1920">1920 px (Full HD)</option><option value="2560">2560 px</option><option value="3840" selected>3840 px (4K)</option><option value="5120">5120 px</option></select></div>
+<div><label>Качество (число проходов)</label><select id="rq"><option value="16">Быстро, 16</option><option value="48" selected>Стандарт, 48</option><option value="96">Высокое, 96</option></select></div></div>
+<label>Яркость</label><input type="range" id="re" min="0.5" max="1.8" step="0.05" value="1" style="padding:0">
+<div style="margin:12px 0"><button class="p" id="rgo" onclick="doRender()">Запустить рендер</button> <button onclick="cancelR=1">Остановить</button></div>
+<div style="height:6px;background:var(--bd);border-radius:3px"><div id="rp" style="height:6px;width:0;background:var(--ac);border-radius:3px"></div></div>
+<div id="rr" hidden style="margin-top:12px"><img id="rimg" alt="Результат рендера" style="width:100%;border-radius:6px"><p><a id="rdl" class="bt" download="kitchen_render.png">Скачать PNG</a> <span id="rinf" style="color:var(--mu)"></span></p></div></div></div></div>
+<script>
+const $=i=>document.getElementById(i),R=Math.round;
+const S={T:16,TF:18,TH:3,TW:38,LEG:100,G:2,BH:720,WY:1420};
+const MAT={mdf_white:[0xf1f5f9,.3,'МДФ эмаль белый матовый'],mdf_gray:[0x3b4658,.5,'МДФ софт-тач графит'],mdf_oak:[0x8a8378,.7,'МДФ дуб серый'],mdf_blue:[0x1e3a8a,.4,'МДФ эмаль индиго'],c_white:[0xe2e8f0,.6,'белый Egger'],c_grey:[0x7b8798,.6,'серый Kronospan'],c_oak:[0xb5a99a,.8,'дуб шамони'],t_marble:[0xe8ecf1,.2,'Постформинг мрамор каррара'],t_oak:[0x9a5a30,.6,'Постформинг дуб вотан'],t_conc:[0x6b7685,.7,'Постформинг лофт бетон']};
+const TY={base:['Шкаф нижний Н',720,560,1],sink:['Мойка НМ',720,560,0],drawer:['Ящики Я',720,560,0],wall:['Шкаф верхний В',720,320,2],tall:['Пенал П',2040,560,3],oven:['Пенал под духовку ПД',2040,560,0],dw:['Посудомойка ПМ',720,560,0],fr:['Холодильник ХД',1850,650,0],hood:['Вытяжка ВТ',180,300,0],bcorner:['Угловой слепой НУ',720,560,1],wbc:['Угловой верхний ВУ',720,320,2]};
+const CAT=[['c1',[['base',400],['base',600],['base',800],['drawer',600],['drawer',800],['sink',600],['sink',800],['sink',1000],['bcorner',900],['bcorner',1000],['bcorner',1100]]],['c2',[['wall',400],['wall',600],['wall',800],['wbc',600],['wbc',700]]],['c3',[['tall',600],['oven',600]]],['c4',[['dw',600],['dw',450],['fr',595]]]];
+const fl=m=>m.type!='wall'&&m.type!='hood'&&m.type!='wbc',tl=m=>m.type=='tall'||m.type=='oven'||m.type=='fr',bs=m=>m.type=='base'||m.type=='sink'||m.type=='drawer'||m.type=='dw'||m.type=='bcorner';
+const bcR=m=>{const a=m.x<=10,e=m.x+m.w>=LN(m)-10;return m.wl=='A'?(e&&!a):m.wl=='B'?a:false};
+const tmat=k=>{const x=new THREE.MeshStandardMaterial({color:MAT[k][0],roughness:MAT[k][1]});x.userData.k=k;return x};
+const BY=m=>m.type=='fr'?0:fl(m)?S.LEG:m.y;
+// Техника: [бренд, серия, ширина, высота, глубина], мм. Габариты типовые для серии, сверяйте с паспортом изделия.
+const AP={oven:[['Bosch','Serie 6',595,595,548],['Siemens','iQ700',595,595,548],['Electrolux','SteamBake',595,594,567],['Samsung','Dual Cook',595,595,550],['Gorenje','Essential',596,596,545],['Hansa','BOEI',595,595,550]],
+hob:[['Bosch','индукция 60 см',592,520,51],['Siemens','индукция 60 см',592,522,51],['Electrolux','индукция 60 см',590,520,55],['Samsung','индукция 60 см',590,520,52],['Hansa','газовая 60 см',580,510,50],['Gorenje','газовая 60 см',580,510,45]],
+hood:[['Bosch','встраиваемая, шкаф 60 см',520,165,290],['Siemens','встраиваемая, шкаф 60 см',520,165,290],['Electrolux','телескопическая',525,160,295],['Gorenje','встраиваемая',520,170,290],['Hansa','телескопическая',520,160,285],['Elica','Hidden',520,150,280],['Krona','Kamilla slim',520,160,285],['Maunfeld','Crosby',520,160,285]],
+sink:[['Mora','1 чаша',500,500,180],['Ukinox','1 чаша',560,500,180],['Franke','Maris, 1 чаша + крыло',780,500,190],['Blanco','Zia, 1 чаша + крыло',780,500,180],['Teka','Classic, 1 чаша + крыло',780,435,170],['Omoikiri','Taki, 1 чаша + крыло',780,500,200],['Franke','Ron, 2 чаши',860,500,190],['Blanco','Axia, 2 чаши',860,500,190],['Alveus','Pure, 2 чаши + крыло',980,500,200]],
+dw:[['Bosch','Serie 4, 60 см',598,815,550],['Siemens','iQ300, 60 см',598,815,550],['Electrolux','60 см',596,818,550],['Beko','60 см',598,820,550],['Hansa','45 см',448,820,550],['Samsung','60 см',598,815,555],['Miele','G 5000, 60 см',598,805,570],['Hotpoint','60 см',598,820,555],['Candy','45 см',448,820,550],['Bosch','Serie 6, 60 см',598,815,550],['Siemens','iQ500, 60 см',598,815,550],['Indesit','45 см',448,820,550]],
+fr:[['Samsung','Bespoke, 595×1850',595,1850,650],['LG','DoorCooling+, 595×2030',595,2030,680],['Bosch','Serie 4, 600×2000',600,2000,650],['Haier','C2F, 595×1860',595,1860,670],['Liebherr','CNef, 600×2010',600,2010,665],['Beko','595×1850',595,1850,640]]};
+const KIND={oven:'oven',dw:'dw',fr:'fr',hood:'hood',sink:'sink'},NM={sink:'Мойка',oven:'Духовой шкаф',hob:'Варочная панель',hood:'Вытяжка',dw:'Посудомоечная машина',fr:'Холодильник'};
+let room={w:3000,d:2500,h:2600},mods=[],M={f:'mdf_white',b:'c_white',t:'t_marble'},sel=null,open=false,hist=[],ws=[],tm;
+let scene,cam,ren,ctl,KG,WG,RG,HG,DL,AM,busy,cancelR;
+const LN=m=>m.wl=='A'?room.w:room.d;
+const fp=m=>{const{w,d,x}=m;return m.wl=='A'?[x,x+w,0,d]:m.wl=='B'?[0,d,x,x+w]:[room.w-d,room.w,x,x+w]};
+const cf=(a,b)=>{const p=fp(a),q=fp(b);return p[0]<q[1]&&q[0]<p[1]&&p[2]<q[3]&&q[2]<p[3]&&(fl(a)==fl(b)||tl(fl(a)?a:b))};
+const free=(m,x)=>x>=0&&x+m.w<=LN(m)&&!mods.some(o=>o.id!=m.id&&cf({...m,x},o));
+function wt(o,wl,x,w){if(wl=='B'){o.rotation.y=Math.PI/2;o.position.set(0,0,x+w)}else if(wl=='C'){o.rotation.y=-Math.PI/2;o.position.set(room.w,0,x)}else o.position.set(x,0,0)}
+const seg=m=>{const H=m.h;if(m.type=='bcorner'||m.type=='wbc')return[{y:0,h:H,n:1,bc:1}];if(m.type=='wall'&&m.hd>=0){const h=AP.hood[m.hd][3]+10;return[{y:0,h,n:1,hd:1},{y:h,h:H-h,n:m.w>=700?2:1}]}if(m.type=='drawer')return[0,1,2].map(i=>({y:i*H/3,h:H/3,n:1,dr:1}));
+ if(m.type=='oven')return[{y:0,h:570,n:1},{y:1170,h:H-1170,n:1}];return[{y:0,h:H,n:!tl(m)&&m.w>=700?2:1}]};
+const hing=h=>h<=900?2:h<=1600?3:h<=2000?4:5;
+const snap=()=>JSON.stringify({mods,M,room});
+function msg(t,bad){const e=$('ms');e.textContent=t;e.style.color=bad?'#dc2626':'';clearTimeout(tm);tm=setTimeout(()=>e.textContent='',3500)}
+function act(fn){hist.push(snap());if(hist.length>60)hist.shift();fn();render()}
+function undo(){if(!hist.length)return;const s=JSON.parse(hist.pop());mods=s.mods;M=s.M;room=s.room;sel=null;sync();buildRoom();render()}
+function mkm(t,w,wl,sd){const d=TY[t],m={id:'M'+Math.random().toString(36).slice(2,7),name:d[0]+w,type:t,w,h:d[1],d:d[2],x:0,y:t=='wall'||t=='wbc'?S.WY:t=='hood'?1500:0,shelves:d[3],wl,ap:t=='sink'?Math.max(0,AP.sink.findIndex(a=>a[2]>=w-200&&a[2]<=w-20)):t=='dw'&&w<500?4:0,hob:-1,hd:-1};
+ if(t=='bcorner'||t=='wbc'){m.wl='A';for(const x of(sd||$('cs').value)=='R'?[room.w-w,0]:[0,room.w-w])if(free(m,x)){m.x=x;return m}}
+ for(let x=0;x+w<=LN(m);x+=10)if(free(m,x)){m.x=x;return m}return null}
+function add(t,w){const m=mkm(t,w,$('wl').value);if(!m)return msg('На стене нет места для модуля '+w+' мм',1);act(()=>{mods.push(m);sel=m});if(t=='bcorner'||t=='wbc')$('wl').value=m.x==0?'B':'C'}
+function preset(k){const f=[],L=(wl,t,w,x={})=>f.push([wl,t,w,x]);
+ if(k=='I'){L('A','fr',595);L('A','base',600,{hob:0});L('A','sink',800);L('A','dw',600);L('A','wall',600,{hd:0});L('A','wall',800);L('A','wall',600)}
+ else{L('A','bcorner',1000,{sd:'L'});if(k=='U')L('A','bcorner',1000,{sd:'R'});
+  if(k=='L'){L('A','base',600,{hob:0});L('A','sink',800);L('A','dw',600)}else{L('A','base',600,{hob:0});L('A','base',400)}
+  L('A','wbc',700,{sd:'L'});if(k=='U')L('A','wbc',700,{sd:'R'});L('A','wall',600,{hd:0,x:1000});L('A','wall',k=='L'?800:400);
+  if(k=='L'){L('B','fr',595);L('B','oven',600);L('B','drawer',600);L('B','wall',600)}
+  else{L('B','sink',800);L('B','dw',600);L('B','base',400);L('B','wall',600);L('B','wall',800);L('C','fr',595);L('C','oven',600);L('C','drawer',600);L('C','wall',600)}}
+ let bad=0;act(()=>{mods=[];sel=null;f.forEach(([wl,t,w,x])=>{const m=mkm(t,w,wl,x.sd);if(!m){bad++;return}if(x.x!=null&&free(m,x.x))m.x=x.x;delete x.sd;delete x.x;mods.push(Object.assign(m,x))})});
+ if(bad)msg('Не поместилось модулей: '+bad+'. Увеличьте размеры помещения',1)}
+function setAp(v){if(!sel)return;const a=AP[KIND[sel.type]][v],c={...sel,ap:v};
+ if(sel.type=='dw')c.w=a[2]<500?450:600;if(sel.type=='fr'||sel.type=='hood'){c.w=a[2];c.h=a[3];c.d=a[4]}
+ if(BY(c)+c.h>room.h||!free(c,c.x)||(sel.type=='sink'&&a[2]>sel.w-20)){msg('Модель не помещается на этом месте',1);insp();return}act(()=>Object.assign(sel,c))}
+function setHob(v){if(!sel)return;if(v>=0&&AP.hob[v][2]>sel.w){msg('Панель шире модуля',1);insp();return}act(()=>sel.hob=v)}
+function setHd(v){if(!sel)return;if(v>=0&&AP.hood[v][2]>sel.w-2*S.T){msg('Вытяжка шире корпуса: нужен шкаф 600 мм и шире',1);insp();return}act(()=>sel.hd=v)}
+function dup(){if(sel){const t=sel;add(t.type,t.w)}}
+function del(){act(()=>{mods=mods.filter(m=>m!=sel);sel=null})}
+function clearAll(){act(()=>{mods=[];sel=null})}
+function setX(v,q){v=Math.round(v/10)*10;if(!sel||v==sel.x)return;
+ if(!free(sel,v)){if(q){insp();return}let f=null;for(let d=10;d<=LN(sel)&&f==null;d+=10)for(const x of[v-d,v+d])if(f==null&&free(sel,x))f=x;
+  if(f==null){msg('Нет свободного места на этой стене',1);insp();return}v=f;msg('Сдвинуто к ближайшему свободному месту')}
+ act(()=>sel.x=v)}
+function upd(){let c={...sel,wl:$('iw').value,name:$('nm').value,w:+$('w').value||sel.w,d:+$('d').value||sel.d,h:bs(sel)?S.BH:+$('h').value||sel.h,shelves:Math.max(0,+$('sh').value||0)};
+ if(BY(c)+c.h>room.h){msg('Модуль выше потолка',1);insp();return}
+ if(!free(c,c.x)){let ok=false;
+  for(let w=c.w;w>=sel.w&&!ok;w-=10){const t={...c,w};if(free(t,t.x)){c=t;ok=true}}
+  if(!ok){c.w=sel.w;for(let d=c.d;d>=sel.d&&!ok;d-=10){const t={...c,d};if(free(t,t.x)){c=t;ok=true}}}
+  if(!ok){msg('Здесь нет места для такого изменения',1);insp();return}
+  msg('Размер ограничен соседями или стеной: '+c.w+' × '+c.d+' мм')}
+ if(c.w!=sel.w&&c.name==sel.name)c.name=c.name.replace(/\d+$/,c.w);
+ act(()=>Object.assign(sel,c))}
+function arrange(){const h=snap(),old=mods.map(m=>m.x);let ok=true;const o=[...mods].sort((a,b)=>a.x-b.x);
+ o.forEach(m=>m.x=-99999);o.forEach(m=>{let f=false;for(let x=0;x+m.w<=LN(m);x+=10)if(free(m,x)){m.x=x;f=true;break}if(!f)ok=false});
+ if(!ok){mods.forEach((m,i)=>m.x=old[i]);msg('Все модули не помещаются в длину стены',1);return}hist.push(h);render()}
+function setRoom(){act(()=>{room={w:+$('rw').value||3000,d:+$('rd').value||2500,h:+$('rh').value||2600}});buildRoom()}
+function setMat(){act(()=>{M={f:$('mf').value,b:$('mb').value,t:$('mt').value}})}
+function sync(){$('rw').value=room.w;$('rd').value=room.d;$('rh').value=room.h;$('mf').value=M.f;$('mb').value=M.b;$('mt').value=M.t}
+function clr(g){g.traverse(o=>{if(o.geometry)o.geometry.dispose();if(o.material)o.material.dispose()});while(g.children.length)g.remove(g.children[0])}
+function build(m){const g=new THREE.Group();g.userData.id=m.id;const{T,TF,TH,LEG,G}=S,W=m.w,D=m.d,H=m.h,by=BY(m);
+ const mk=k=>{const x=new THREE.MeshStandardMaterial({color:MAT[k][0],roughness:MAT[k][1]});x.userData.k=k;return x};
+ const bm=mk(M.b),fm=mk(M.f),hm=new THREE.MeshStandardMaterial({color:0x52525b,roughness:.9}),mm=new THREE.MeshStandardMaterial({color:0x94a3b8,metalness:.8,roughness:.3}),am=new THREE.MeshStandardMaterial({color:0x1f2937,metalness:.6,roughness:.3});
+ const bx=(w,h,d,mt,x,y,z,p=g)=>{const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mt);o.position.set(x,y,z);o.castShadow=true;p.add(o);return o};
+ const fin=()=>{wt(g,m.wl,m.x,m.w);return g};
+ if(m.type=='fr'){bx(W,H,D,new THREE.MeshStandardMaterial({color:0xd5dbe3,metalness:.5,roughness:.35}),W/2,H/2,D/2);bx(8,H*.4,14,mm,35,H*.62,D+7);bx(8,H*.25,14,mm,35,H*.2,D+7);return fin()}
+ if(m.type=='hood'){bx(W,H,D,am,W/2,m.y+H/2,D/2);return fin()}
+ if(fl(m)){const n=W>=800?3:2;for(let i=0;i<n;i++)for(const z of[35,D-50]){const l=new THREE.Mesh(new THREE.CylinderGeometry(20,25,LEG,12),mm);l.position.set(i==0?35:i==n-1?W-35:W/2,LEG/2,z);g.add(l)}
+  bx(W-4,LEG-4,T,bm,W/2,LEG/2,D-50)}
+ if(m.type=='dw')bx(W-4,H-4,D-20,am,W/2,by+H/2,(D-20)/2);else{bx(T,H,D,bm,T/2,by+H/2,D/2);bx(T,H,D,bm,W-T/2,by+H/2,D/2);bx(W-2*T,T,D,bm,W/2,by+T/2,D/2);
+ if(bs(m)){for(const z of[40,D-40])bx(W-2*T,T,80,bm,W/2,by+H-T/2,z)}else bx(W-2*T,T,D,bm,W/2,by+H-T/2,D/2);
+ if(m.type=='oven')[570,1170].forEach(y=>bx(W-2*T,T,D-20,bm,W/2,by+y,D/2-10));
+ for(let i=1;i<=m.shelves;i++)bx(W-2*T-2,T,D-20,bm,W/2,by+i*H/(m.shelves+1),D/2-10);
+ bx(W-4,H-4,TH,hm,W/2,by+H/2,TH/2);
+ if(m.type=='oven'){const o=AP.oven[m.ap||0];bx(W-2*T-4,Math.min(o[3],580),o[4],am,W/2,by+870,D-o[4]/2)}
+ if(m.hd>=0){const o=AP.hood[m.hd];bx(Math.min(o[2],W-2*T-4),o[3],o[4],am,W/2,by+T+o[3]/2,D-o[4]/2)}}
+ if(m.type=='sink'){const a=AP.sink[m.ap||0],Y=S.LEG+S.BH+S.TW,f=new THREE.Mesh(new THREE.CylinderGeometry(14,14,230,10),mm);bx(a[2],3,a[3],mm,W/2,Y+1.5,300);bx(a[2]*.55,4,a[3]*.7,am,W/2-a[2]*.08,Y+3,300);f.position.set(W/2,Y+115,70);g.add(f);bx(14,14,150,mm,W/2,Y+225,140)}
+ if(m.hob>=0&&AP.hob[m.hob][2]<=W){const h=AP.hob[m.hob];bx(h[2],4,h[3],am,W/2,S.LEG+S.BH+S.TW+2,300)}
+ seg(m).forEach(s=>{const fh=s.h-2*G,fy=by+s.y+s.h/2;
+  if(s.hd){bx(W-2*G,fh,18,am,W/2,fy,D+9);for(let i=0;i<3;i++)bx(W*.6,3,20,mm,W/2,fy-fh/4+i*fh/4,D+19);return}
+  if(s.bc){const dw=W-D-20,R=bcR(m),fw=W-2*G-dw-3,x0=R?G:W-G-dw,q=new THREE.Group();q.position.set(R?x0+dw:x0,fy,D);q.userData={a:R?1:-1};
+   bx(fw,fh,TF,fm,R?G+dw+3+fw/2:G+fw/2,fy,D+TF/2);bx(dw,fh,TF,fm,R?-dw/2:dw/2,0,TF/2,q);bx(10,Math.min(128,fh*.4),20,mm,R?-dw+30:dw-30,0,TF+10,q);g.add(q);return}
+  if(s.dr){const p=new THREE.Group();p.userData={dr:1};bx(W-2*G,fh,TF,fm,W/2,fy,D+TF/2,p);bx(160,12,20,mm,W/2,fy+fh/2-34,D+TF+10,p);g.add(p);return}
+  const n=s.n,dw=(W-2*G-(n-1)*3)/n;
+  for(let i=0;i<n;i++){const L=i==0,p=new THREE.Group();p.position.set(L?G:W-G,fy,D);p.userData={a:L?-1:1};
+   bx(dw,fh,TF,fm,L?dw/2:-dw/2,0,TF/2,p);bx(10,Math.min(128,fh*.4),20,mm,L?dw-30:-dw+30,0,TF+10,p);g.add(p)}});
+ wt(g,m.wl,m.x,m.w);return g}
+function tops(){clr(WG);ws=[];mods.filter(bs).sort((a,c)=>a.wl<c.wl?-1:a.wl>c.wl?1:a.x-c.x).forEach(m=>{const l=ws[ws.length-1];
+ if(l&&l.wl==m.wl&&Math.abs(l.x+l.w-m.x)<5){l.w+=m.w;l.d=Math.max(l.d,m.d+40);l.sk+=m.type=='sink'?1:0}else ws.push({wl:m.wl,x:m.x,w:m.w,d:m.d+40,sk:m.type=='sink'?1:0,hb:[]});{const w=ws[ws.length-1];if(m.hob>=0){const a=AP.hob[m.hob];w.hb.push(['панель '+a[0],a[1],a[2],a[3]])}if(m.type=='sink'){const a=AP.sink[m.ap||0];w.hb.push(['мойку '+a[0],a[1],a[2],a[3]])}}});
+ ws.forEach(s=>{if(s.wl=='A')return;ws.filter(a=>a.wl=='A'&&(s.wl=='B'?a.x<=5:a.x+a.w>=room.w-5)).forEach(a=>{if(s.x<a.d){s.w-=a.d-s.x;s.x=a.d}})});
+ ws.forEach(a=>{if(a.wl!='A')return;ws.filter(b=>b.wl!='A'&&b.x<=5).forEach(b=>{if(b.wl=='B'&&a.x<b.d){a.w-=b.d-a.x;a.x=b.d}if(b.wl=='C'&&a.x+a.w>room.w-b.d)a.w=room.w-b.d-a.x})});
+ const t=MAT[M.t];ws.forEach(s=>{const g=new THREE.Group(),o=new THREE.Mesh(new THREE.BoxGeometry(s.w,S.TW,s.d),tmat(M.t));
+ o.position.set(s.w/2,S.LEG+S.BH+S.TW/2,s.d/2);o.castShadow=o.receiveShadow=true;g.add(o);wt(g,s.wl,s.x,s.w);WG.add(g)})}
+function hl(){hdl();KG.children.forEach(g=>g.traverse(o=>{if(o.isMesh){o.material.emissive.setHex(sel&&g.userData.id==sel.id?0x1d4ed8:0);o.material.emissiveIntensity=.35}}))}
+function hdl(){clr(HG);const m=sel;if(!m||['fr','dw','hood'].includes(m.type))return;const y=BY(m)+m.h/2,F=30;
+ [0,1].forEach(i=>{const a=m.x+(i?m.w:0),o=new THREE.Mesh(new THREE.SphereGeometry(32,16,12),new THREE.MeshBasicMaterial({color:0xf59e0b,depthTest:false}));
+  o.position.set(...(m.wl=='A'?[a,y,m.d+F]:m.wl=='B'?[m.d+F,y,a]:[room.w-m.d-F,y,a]));o.renderOrder=9;o.userData.hd=i?'e':'s';HG.add(o)})}
+function applyOpen(){KG.traverse(o=>{if(o.userData.a)o.rotation.y=open?o.userData.a*1.9:0;if(o.userData.dr)o.position.z=open?300:0})}
+function toggleOpen(){open=!open;applyOpen()}
+function stat(){const L=mods.filter(fl).reduce((a,m)=>a+m.w,0),bad=mods.some(m=>BY(m)+m.h>room.h||m.x+m.w>LN(m));
+ $('st').innerHTML='Стена <b>'+room.w+'</b> мм, гарнитур <b>'+L+'</b> мм, модулей <b>'+mods.length+'</b>';$('dot').style.background=bad?'#ef4444':'#10b981'}
+function insp(){const m=sel;$('ns').hidden=!!m;$('ctl').hidden=!m;if(!m)return;
+ $('nm').value=m.name;$('w').value=m.w;$('d').value=m.d;$('h').value=m.h;$('h').disabled=bs(m);$('sh').value=m.shelves;$('sh').disabled=['oven','drawer','dw','fr','hood'].includes(m.type);
+ $('xn').value=m.x;$('iw').value=m.wl;const k=KIND[m.type];$('apb').hidden=!k;
+ if(k){$('ia').innerHTML=AP[k].map((a,i)=>'<option value="'+i+'">'+a[0]+' '+a[1]+' ('+a[2]+'×'+a[3]+'×'+a[4]+')</option>').join('');$('ia').value=m.ap||0}
+ $('hb').hidden=!(m.type=='base'||m.type=='drawer');if(!$('hb').hidden){$('ih').innerHTML='<option value="-1">Без варочной панели</option>'+AP.hob.map((a,i)=>'<option value="'+i+'">'+a[0]+' '+a[1]+'</option>').join('');$('ih').value=m.hob>=0?m.hob:-1}
+ $('hdb').hidden=m.type!='wall';if(m.type=='wall'){$('ik').innerHTML='<option value="-1">Без вытяжки</option>'+AP.hood.map((a,i)=>'<option value="'+i+'">'+a[0]+' '+a[1]+' ('+a[2]+'×'+a[3]+'×'+a[4]+')</option>').join('');$('ik').value=m.hd>=0?m.hd:-1}
+ $('xr').max=LN(m)-m.w;$('xr').value=m.x}
+function render(){mods.forEach(m=>m.wl=m.wl||'A');clr(KG);mods.forEach(m=>KG.add(build(m)));tops();hl();applyOpen();stat();insp();try{localStorage.setItem('k3d',snap())}catch(e){}}
+function buildRoom(keep){clr(RG);const{w,d,h}=room,pl=(W,H,c,x,y,z,ry)=>{const o=new THREE.Mesh(new THREE.PlaneGeometry(W,H),new THREE.MeshStandardMaterial({color:c,roughness:.9}));o.position.set(x,y,z);o.rotation.y=ry;o.receiveShadow=true;RG.add(o)};
+ const f=new THREE.Mesh(new THREE.PlaneGeometry(w,d),new THREE.MeshStandardMaterial({color:0x7b8798,roughness:.9}));f.rotation.x=-Math.PI/2;f.position.set(w/2,0,d/2);f.receiveShadow=true;RG.add(f);
+ pl(w,h,0xb8c2d1,w/2,h/2,-1,0);pl(d,h,0xaab4c3,-1,h/2,d/2,Math.PI/2);pl(d,h,0xaab4c3,w+1,h/2,d/2,-Math.PI/2);if(!keep)resetCam()}
+function resetCam(){cam.position.set(room.w/2,1700,room.d+1800);ctl.target.set(room.w/2,900,0);ctl.update()}
+function init(){const c=$('cv');scene=new THREE.Scene();scene.background=new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue('--v3').trim());
+ cam=new THREE.PerspectiveCamera(45,c.clientWidth/c.clientHeight,10,30000);ren=new THREE.WebGLRenderer({antialias:true});ren.setPixelRatio(Math.min(devicePixelRatio,2));ren.setSize(c.clientWidth,c.clientHeight);ren.shadowMap.enabled=true;c.appendChild(ren.domElement);
+ ctl=new THREE.OrbitControls(cam,ren.domElement);ctl.enableDamping=true;ctl.maxPolarAngle=Math.PI/2-.02;
+ AM=new THREE.AmbientLight(0xffffff,.75);scene.add(AM);const dl=DL=new THREE.DirectionalLight(0xffffff,.8);dl.position.set(2000,3500,3000);dl.castShadow=true;
+ Object.assign(dl.shadow.camera,{left:-4000,right:4000,top:4000,bottom:-4000,far:9000});scene.add(dl);
+ KG=new THREE.Group();WG=new THREE.Group();RG=new THREE.Group();HG=new THREE.Group();scene.add(KG,WG,RG,HG);
+ const rc=new THREE.Raycaster(),mv=new THREE.Vector2();let d0;
+ ren.domElement.addEventListener('pointerdown',e=>d0=[e.clientX,e.clientY]);
+ ren.domElement.addEventListener('pointerup',e=>{if(Math.hypot(e.clientX-d0[0],e.clientY-d0[1])>5)return;const r=ren.domElement.getBoundingClientRect();
+  mv.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);rc.setFromCamera(mv,cam);const h=rc.intersectObjects(KG.children,true)[0];
+  let id=null;if(h){let o=h.object;while(o.parent!=KG)o=o.parent;id=o.userData.id}sel=mods.find(m=>m.id==id)||null;hl();insp()});
+ new ResizeObserver(()=>{cam.aspect=c.clientWidth/c.clientHeight;cam.updateProjectionMatrix();ren.setSize(c.clientWidth,c.clientHeight)}).observe(c);
+ (function a(){requestAnimationFrame(a);ctl.update();if(!busy)ren.render(scene,cam)})()}
+function drag(){const el=ren.domElement,rc=new THREE.Raycaster(),mv=new THREE.Vector2(),pt=new THREE.Vector3();let D=null;
+ const ray=e=>{const r=el.getBoundingClientRect();mv.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);rc.setFromCamera(mv,cam)};
+ el.addEventListener('pointerdown',e=>{ray(e);const hh=rc.intersectObjects(HG.children,false)[0];if(hh&&sel){D={m:sel,hd:hh.object.userData.hd,h:snap(),mv:0,x0:sel.x,e0:sel.x+sel.w,y:BY(sel)+sel.h/2};ctl.enabled=false;return}
+  const h=rc.intersectObjects(KG.children,true)[0];if(!h)return;let o=h.object;while(o.parent!=KG)o=o.parent;
+  const m=mods.find(x=>x.id==o.userData.id);sel=m;hl();insp();ctl.enabled=false;D={m,h:snap(),mv:0,y:BY(m)+m.h/2}});
+ el.addEventListener('pointermove',e=>{if(!D)return;ray(e);if(!rc.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,1,0),-D.y),pt))return;
+  if(D.hd){const m=D.m,a=Math.round((m.wl=='A'?pt.x:pt.z)/10)*10,want=D.hd=='e'?a-D.x0:D.e0-a;let best=null;
+   for(let w=Math.max(200,Math.min(1200,want));w>=200;w-=10){const t=D.hd=='e'?{...m,w}:{...m,w,x:D.e0-w};if(free(t,t.x)){best=t;break}}
+   if(best&&(best.w!=m.w||best.x!=m.x)){if(!D.mv){hist.push(D.h);D.mv=1}m.w=best.w;m.x=best.x;m.name=m.name.replace(/\d+$/,m.w);render();msg('Ширина '+m.w+' мм')}return}
+  const m=D.m,wl=[['A',pt.z],['B',pt.x],['C',room.w-pt.x]].sort((a,b)=>a[1]-b[1])[0][0],c={...m,wl};
+  let x=Math.round(((wl=='A'?pt.x:pt.z)-m.w/2)/10)*10;x=Math.max(0,Math.min(LN(c)-m.w,x));
+  if((wl!=m.wl||x!=m.x)&&free(c,x)){if(!D.mv){hist.push(D.h);D.mv=1}m.wl=wl;m.x=x;render()}});
+ const up=()=>{ctl.enabled=true;D=null};el.addEventListener('pointerup',up);el.addEventListener('pointercancel',up)}
+// ---------- Рендер ----------
+const TX={};
+function tex(k){if(TX[k])return TX[k];const c=document.createElement('canvas');c.width=c.height=512;const x=c.getContext('2d');
+ x.fillStyle='#'+MAT[k][0].toString(16).padStart(6,'0');x.fillRect(0,0,512,512);
+ if(/oak/.test(k)){for(let i=0;i<260;i++){const y=Math.random()*512;x.fillStyle='rgba(0,0,0,'+(.03+Math.random()*.07)+')';x.beginPath();x.moveTo(0,y);for(let u=0;u<=512;u+=32)x.lineTo(u,y+Math.sin(u/60+i)*3);x.lineTo(512,y+1+Math.random()*3);x.lineTo(0,y+2);x.fill()}}
+ else if(k=='t_marble'){x.lineWidth=1.2;for(let i=0;i<26;i++){x.strokeStyle='rgba(90,100,115,'+(.12+Math.random()*.3)+')';x.beginPath();let px=Math.random()*512,py=0;x.moveTo(px,py);for(let j=0;j<24;j++){px+=(Math.random()-.5)*60;py+=22;x.lineTo(px,py)}x.stroke()}}
+ else for(let i=0;i<9000;i++){x.fillStyle='rgba('+(Math.random()<.5?'0,0,0':'255,255,255')+','+Math.random()*.08+')';x.fillRect(Math.random()*512,Math.random()*512,2,2)}
+ const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=8;t.encoding=THREE.sRGBEncoding;return TX[k]=t}
+function uvw(g){if(g.type!='BoxGeometry'||g.userData.uvd)return;g.userData.uvd=1;const{width:w,height:h,depth:d}=g.parameters,a=g.attributes.uv;
+ for(let f=0;f<6;f++)for(let i=f*4;i<f*4+4;i++){const u=a.getX(i),v=a.getY(i);
+  if(f<2)a.setXY(i,v*h/1000,u*d/1000);else if(f<4)a.setXY(i,u*w/1000,v*d/1000);else a.setXY(i,v*h/1000,u*w/1000)}a.needsUpdate=true}
+function upgrade(){const tx=k=>/oak/.test(k)||k=='t_marble'||k=='t_conc',cache=new Map();
+ [KG,WG].forEach(G=>G.traverse(o=>{if(!o.isMesh)return;o.receiveShadow=true;const m=o.material,k=m.userData.k;
+  if(!cache.has(m)){let n=m;
+   if(k){const d=MAT[k],gl=k.startsWith('mdf'),t=k=='t_marble';n=new THREE.MeshPhysicalMaterial({color:d[0],roughness:t?.18:gl?.35:d[1],clearcoat:gl?.35:t?.7:0,clearcoatRoughness:.2,envMapIntensity:.7});
+    if(tx(k)){n.map=tex(k);n.color.set(0xffffff)}else n.color.convertSRGBToLinear()}
+   else{m.color.convertSRGBToLinear();if(m.metalness>.7){m.roughness=.22;m.envMapIntensity=1.3}else if(m.metalness>.5){m.roughness=.1;m.metalness=.3;m.envMapIntensity=1.2}}
+   n.needsUpdate=true;cache.set(m,n)}
+  o.material=cache.get(m);if(k&&tx(k))uvw(o.geometry)}));
+ RG.children.forEach((o,i)=>{o.material.color.set(i?0xf0ede7:0xd6cfc4).convertSRGBToLinear();o.material.roughness=i?.95:.45;o.material.needsUpdate=true})}
+function envT(){const pm=new THREE.PMREMGenerator(ren),e=new THREE.Scene(),sk=new THREE.Mesh(new THREE.SphereGeometry(50,32,16),new THREE.MeshBasicMaterial({side:THREE.BackSide,vertexColors:true})),P=sk.geometry.attributes.position,col=[];
+ for(let i=0;i<P.count;i++){const t=(P.getY(i)/50+1)/2;col.push(.5+.5*t,.52+.5*t,.56+.46*t)}
+ sk.geometry.setAttribute('color',new THREE.Float32BufferAttribute(col,3));e.add(sk);
+ [[0,44,0,40,40,5],[-42,16,18,26,18,7],[30,14,40,30,16,3]].forEach(([x,y,z,w,h,v])=>{const m=new THREE.MeshBasicMaterial({side:THREE.DoubleSide});m.color.setRGB(v,v,v);const p=new THREE.Mesh(new THREE.PlaneGeometry(w,h),m);p.position.set(x,y,z);p.lookAt(0,0,0);e.add(p)});
+ const r=pm.fromScene(e,.04);pm.dispose();return r}
+async function doRender(){if(busy)return;const c=$('cv'),W=Math.min(+$('rs').value,ren.capabilities.maxTextureSize),H=Math.round(W*c.clientHeight/c.clientWidth),N=+$('rq').value;
+ busy=1;cancelR=0;$('rgo').disabled=true;const sv={sel,bg:scene.background,pr:ren.getPixelRatio()};sel=null;hl();let env=null;
+ try{ren.setPixelRatio(1);ren.setSize(W,H,false);ren.outputEncoding=THREE.sRGBEncoding;ren.toneMapping=THREE.ACESFilmicToneMapping;ren.toneMappingExposure=+$('re').value;ren.shadowMap.type=THREE.PCFSoftShadowMap;
+  env=envT();scene.environment=env.texture;scene.background=new THREE.Color(0xe9edf2).convertSRGBToLinear();upgrade();
+  DL.color.set(0xfff4e5);DL.intensity=2.2;AM.intensity=.15;DL.shadow.mapSize.set(4096,4096);DL.shadow.bias=-.0004;DL.shadow.normalBias=3;DL.target.position.set(room.w/2,0,room.d/2);scene.add(DL.target);
+  const acc=document.createElement('canvas');acc.width=W;acc.height=H;const x=acc.getContext('2d'),L=[room.w/2+1800,3200,room.d/2+2600];let n=0;
+  for(;n<N&&!cancelR;n++){DL.position.set(L[0]+(Math.random()-.5)*900,L[1]+(Math.random()-.5)*500,L[2]+(Math.random()-.5)*900);
+   cam.setViewOffset(W,H,Math.random()-.5,Math.random()-.5,W,H);ren.render(scene,cam);x.globalAlpha=1/(n+1);x.drawImage(ren.domElement,0,0);
+   $('rp').style.width=(n+1)/N*100+'%';await new Promise(r=>setTimeout(r))}
+  cam.clearViewOffset();const b=await new Promise(r=>acc.toBlob(r,'image/png')),u=URL.createObjectURL(b);
+  $('rimg').src=u;$('rdl').href=u;$('rinf').textContent=W+' × '+H+' px, проходов: '+n+', '+Math.round(b.size/1048576*10)/10+' МБ';$('rr').hidden=false}
+ catch(e){msg('Ошибка рендера: '+e.message+'. Попробуйте меньшее разрешение',1)}
+ finally{ren.outputEncoding=THREE.LinearEncoding;ren.toneMapping=THREE.NoToneMapping;ren.toneMappingExposure=1;ren.shadowMap.type=THREE.PCFShadowMap;scene.environment=null;if(env)env.dispose();scene.background=sv.bg;
+  DL.color.set(0xffffff);DL.intensity=.8;AM.intensity=.75;DL.position.set(2000,3500,3000);DL.target.position.set(0,0,0);scene.remove(DL.target);DL.shadow.mapSize.set(512,512);if(DL.shadow.map){DL.shadow.map.dispose();DL.shadow.map=null}
+  cam.clearViewOffset();ren.setPixelRatio(sv.pr);ren.setSize(c.clientWidth,c.clientHeight);cam.aspect=c.clientWidth/c.clientHeight;cam.updateProjectionMatrix();
+  sel=sv.sel;buildRoom(true);render();busy=0;$('rgo').disabled=false}}
+// ---------- Ведомость ----------
+function calc(){const AL=[],P=[],hw={conf:0,hing:0,leg:0,hand:0,sup:0,slide:0,br:0,scr:0},A={b:0,f:0,h:0},E={e2:0,e4:0},bn=MAT[M.b][2],fn=MAT[M.f][2];
+ mods.forEach(m=>{const{T,TF,G}=S,W=m.w,D=m.d,H=m.h;
+  const p=(nm,c,k,L,Wd,Th,e=[0,0,0,0])=>{P.push({m:m.name,nm,c,k,mt:k=='b'?'ЛДСП '+T+' мм, '+bn:k=='f'?fn+' 18 мм':'ХДФ 3 мм',L:R(L),W:R(Wd),Th,e});A[k]+=c*L*Wd/1e6;
+   e.forEach((v,i)=>{const n=c*(i<2?L:Wd)/1000;if(v==2)E.e2+=n;if(v==.4)E.e4+=n})};
+  const ak=KIND[m.type];if(ak)AL.push([ak,AP[ak][m.ap||0],m.name]);if(m.hob>=0)AL.push(['hob',AP.hob[m.hob],m.name]);if(m.hd>=0)AL.push(['hood',AP.hood[m.hd],m.name+', врезка в шкаф']);
+  if(m.type=='fr'||m.type=='hood')return;
+  if(m.type=='dw'){p('Фасад посудомойки',1,'f',H-4,W-4,TF,[2,2,2,2]);p('Цоколь',1,'b',W-4,S.LEG,T,[2,0,0,0]);hw.hand++;hw.leg+=4;return}
+  p('Боковина',2,'b',H,D,T,[2,.4,.4,.4]);p('Дно',1,'b',W-2*T,D,T,[2,0,0,0]);
+  if(bs(m))p('Царга верхняя',2,'b',W-2*T,80,T,[.4,.4,0,0]);else p('Крышка',1,'b',W-2*T,D,T,[2,0,0,0]);
+  if(m.type=='oven')p('Полка фиксированная',2,'b',W-2*T,D-20,T,[2,0,0,0]);
+  if(m.shelves>0){p('Полка съёмная',m.shelves,'b',W-2*T-2,D-20,T,[2,0,0,0]);hw.sup+=4*m.shelves}
+  p('Задняя стенка',1,'h',H-4,W-4,3);if(fl(m))p('Цоколь',1,'b',W-4,S.LEG,T,[2,0,0,0]);
+  seg(m).forEach(s=>{if(s.hd)return;const fh=s.h-2*G,n=s.n,dw=s.bc?W-D-20:(W-2*G-(n-1)*3)/n;p(s.dr?'Фасад ящика':'Фасад',n,'f',fh,dw,TF,[2,2,2,2]);hw.hand+=n;if(s.bc)p('Фальш-панель',1,'f',fh,W-2*G-dw-3,TF,[2,2,2,2]);
+   if(s.dr){const bw=W-2*T-26;p('Боковина ящика',2,'b',D-60,100,T,[.4,0,0,0]);p('Перед/зад ящика',2,'b',bw-2*T,100,T,[.4,0,0,0]);p('Дно ящика',1,'h',D-62,bw-2,3);hw.slide++;hw.scr+=12}
+   else{hw.hing+=hing(fh)*n;hw.scr+=4*n}});
+  hw.conf+=m.type=='oven'?16:8;hw.scr+=16;if(fl(m))hw.leg+=W>=800?6:4;if(m.type=='wall'||m.type=='wbc')hw.br+=2});
+ return{P,hw,A,E,AL}}
+function repHTML(){const{P,hw,A,E,AL}=calc(),sh=a=>Math.ceil(a*1.15/5.796),f1=x=>x.toFixed(2);
+ const rows=P.map(x=>'<tr><td>'+x.m+'</td><td>'+x.nm+'</td><td>'+x.c+'</td><td>'+x.mt+'</td><td>'+x.L+' × '+x.W+' × '+x.Th+'</td><td>'+x.e[0]+' / '+x.e[1]+'</td><td>'+x.e[2]+' / '+x.e[3]+'</td></tr>').join('');
+ const H=[['Конфирмат 7×50',hw.conf],['Петли с доводчиком',hw.hing],['Монтажные планки петель',hw.hing],['Направляющие ящиков (комплект)',hw.slide],['Ножки регулируемые H=100',hw.leg],['Ручки',hw.hand],['Полкодержатели',hw.sup],['Навесы для верхних шкафов',hw.br],['Саморезы 3,5×16',hw.scr]];
+ const WT=ws.map((s,i)=>'<tr><td>Секция '+(i+1)+'</td><td>'+s.w+' × '+s.d+' × 38</td><td>'+(s.hb.map(h=>'вырез под '+h[0]+' '+h[1]+', '+(h[2]-2)+'×'+(h[3]-2)).join('; ')||'—')+'</td></tr>').join('');
+ return '<h2>Проект кухонного гарнитура</h2><div>Дата: '+new Date().toLocaleDateString('ru-RU')+'. Модулей: '+mods.length+'. Стена: '+room.w+' мм.</div>'+
+ '<h4>1. Детали (размеры в мм; кромка: длинные L1/L2, короткие W1/W2)</h4><table><tr><th>Модуль</th><th>Деталь</th><th>Шт</th><th>Материал</th><th>Д × Ш × Т</th><th>Кромка L1/L2</th><th>Кромка W1/W2</th></tr>'+rows+'</table>'+
+ '<h4>2. Столешница 38 мм</h4><table><tr><th>Секция</th><th>Д × Г × Т</th><th>Операции</th></tr>'+WT+'</table><div>Торцевые планки: '+ws.length*2+' шт.</div>'+
+ '<h4>3. Фурнитура</h4><table><tr><th>Наименование</th><th>Кол-во</th></tr>'+H.map(h=>'<tr><td>'+h[0]+'</td><td>'+h[1]+'</td></tr>').join('')+'</table>'+
+ '<h4>Техника (габариты типовые для серии, сверьте с паспортом изделия до запуска в производство)</h4><table><tr><th>Тип</th><th>Бренд, серия</th><th>Ш × В × Г, мм</th><th>Модуль</th></tr>'+AL.map(x=>'<tr><td>'+NM[x[0]]+'</td><td>'+x[1][0]+' '+x[1][1]+'</td><td>'+x[1][2]+' × '+x[1][3]+' × '+x[1][4]+'</td><td>'+x[2]+'</td></tr>').join('')+'</table>'+
+ '<h4>4. Карта раскроя (деталь L вдоль листа, пропил 4 мм, обрезка 10 мм с края)</h4><div>Площадь фасадов: '+f1(A.f)+' м². Размер плиты МДФ уточните у поставщика.</div>'+nest(P)+
+ '<div>Кромка ПВХ 2,0 мм: '+f1(E.e2)+' пог. м. Кромка ПВХ 0,4 мм: '+f1(E.e4)+' пог. м. Рекомендуется закладывать запас 10%.</div>'}
+function pack(it,[SL,SW]){const K=4,UL=SL-20,UW=SW-20,sh=[],over=[];it.sort((a,b)=>b.W-a.W||b.L-a.L);
+ for(const p of it){if(p.L>UL||p.W>UW){over.push(p);continue}let ok=false;
+  for(const s of sh){for(const r of s.rows)if(r.h>=p.W&&UL-r.x>=p.L){p.x=r.x;p.y=r.y;r.x+=p.L+K;s.pcs.push(p);ok=true;break}if(ok)break;
+   const q=s.rows[s.rows.length-1],y=q.y+q.h+K;if(UW-y>=p.W){s.rows.push({y,h:p.W,x:p.L+K});p.x=0;p.y=y;s.pcs.push(p);ok=true;break}}
+  if(!ok){p.x=0;p.y=0;sh.push({rows:[{y:0,h:p.W,x:p.L+K}],pcs:[p]})}}
+ return{sh,over,UL,UW}}
+function nest(P){const SH={b:['ЛДСП 16 мм',2800,2070],h:['ХДФ 3 мм',2800,2070],f:['МДФ 18 мм, фасады',2800,1220]};let o='';
+ for(const k of['b','h','f']){const it=[];P.filter(x=>x.k==k).forEach(x=>{for(let i=0;i<x.c;i++)it.push({L:x.L,W:x.W})});if(!it.length)continue;
+  const r=pack(it,[SH[k][1],SH[k][2]]),use=it.reduce((a,p)=>a+p.L*p.W,0),tot=r.sh.length*r.UL*r.UW;
+  o+='<h4>'+SH[k][0]+': листов '+r.sh.length+' ('+SH[k][1]+' × '+SH[k][2]+'), использование '+R(use/tot*100)+'%'+(r.over.length?', не помещается на лист деталей: '+r.over.length:'')+'</h4>';
+  r.sh.forEach((s,i)=>{o+='<div style="display:inline-block;width:49%;vertical-align:top"><div>Лист '+(i+1)+'</div><svg viewBox="0 0 '+r.UL+' '+r.UW+'" width="98%" style="border:1px solid #888"><rect width="'+r.UL+'" height="'+r.UW+'" fill="#fff"/>'+
+   s.pcs.map(p=>'<rect x="'+p.x+'" y="'+p.y+'" width="'+p.L+'" height="'+p.W+'" fill="#dbe7ff" stroke="#1d4ed8" stroke-width="3"/>'+(p.W>=90&&p.L>=260?'<text x="'+(p.x+12)+'" y="'+(p.y+p.W/2+14)+'" font-size="'+Math.min(44,p.W*.45)+'">'+p.L+'×'+p.W+'</text>':'')).join('')+'</svg></div>'})}
+ return o}
+function openRep(){$('rb').innerHTML=repHTML();$('rm').style.display='flex'}
+function openPj(){$('pj').value=snap();$('pm').style.display='flex'}
+function cl(i){$(i).style.display='none'}
+function loadPj(){try{const s=JSON.parse($('pj').value);if(!Array.isArray(s.mods))throw 0;hist.push(snap());mods=s.mods;M=s.M;room=s.room;sel=null;sync();buildRoom();render();cl('pm')}catch(e){msg('Не удалось прочитать проект: проверьте JSON',1)}}
+async function pdf(){const w=document.createElement('div');w.className='rp';w.style.cssText='position:absolute;left:-9999px;top:0;width:1000px';w.innerHTML=repHTML();document.body.appendChild(w);
+ const c=await html2canvas(w,{scale:1.5,backgroundColor:'#fff'});w.remove();const d=new window.jspdf.jsPDF('p','mm','a4'),ps=c.width*297/210;
+ for(let y=0,i=0;y<c.height;y+=ps,i++){const s=document.createElement('canvas');s.width=c.width;s.height=Math.min(ps,c.height-y);s.getContext('2d').drawImage(c,0,y,c.width,s.height,0,0,c.width,s.height);
+  if(i)d.addPage();d.addImage(s.toDataURL('image/jpeg',.92),'JPEG',0,0,210,s.height*210/c.width)}
+ d.save('kitchen_report_'+new Date().toISOString().slice(0,10)+'.pdf')}
+// ---------- Старт ----------
+CAT.forEach(([id,l])=>l.forEach(([t,w])=>{const b=document.createElement('button'),d=TY[t];b.innerHTML=d[0]+w+'<small>'+w+' × '+d[2]+' × '+d[1]+'</small>';b.onclick=()=>add(t,w);$(id).appendChild(b)}));
+Object.keys(MAT).forEach(k=>{const o=new Option((k[0]=='c'?'ЛДСП 16 мм, ':'')+MAT[k][2],k);$(k.startsWith('mdf')?'mf':k[0]=='c'?'mb':'mt').appendChild(o)});
+addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key=='z'&&!/INPUT|TEXTAREA/.test(document.activeElement.tagName)){e.preventDefault();undo()}});
+init();drag();let ok=false;try{const s=JSON.parse(localStorage.getItem('k3d')||'null');if(s&&s.mods&&s.mods.length){mods=s.mods;M=s.M;room=s.room;ok=true}}catch(e){}
+sync();buildRoom();if(ok)render();else{add('base',600);add('drawer',800);add('sink',800);add('wall',600);add('wall',800);sel=null;hist=[];render()}
+</script></body></html>
